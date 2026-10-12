@@ -234,7 +234,6 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
       <select id="mapSel"></select>
       <span class="rolechip" id="roleChip" hidden>Player view</span>
       <button type="button" class="pvtoggle" id="pvBtn" aria-pressed="false" hidden title="See the atlas the way your players do">Player view</button>
-      <button type="button" class="dmtoggle" id="dmBtn" aria-pressed="false" hidden title="Show character sheets and DM secrets">DM mode</button>
       <label class="btn primary" id="uploadTop" for="fileIn" hidden>Upload map</label>
     </div>
   </header>
@@ -320,8 +319,8 @@ let mode = 'move';         // move | place | npc | pin-npc
 let pinningNpc = null;     // npc id waiting for a map position
 let tab = 'details';
 let showLabels = store.get('atlas-labels') !== '0';
-let dmMode = store.get('atlas-dm') === '1';
-const showSheets = () => isDM && !playerView && dmMode;
+// DMs always see character sheets and secrets, except while previewing the player view.
+const showSheets = () => isDM && !playerView;
 let dataError = '';
 
 /* ---------- Toast ---------- */
@@ -696,8 +695,6 @@ async function uploadSheet(file, npcId) {
   }
 }
 function applyDm() {
-  $('#dmBtn').setAttribute('aria-pressed', String(dmMode));
-  $('#dmBtn').hidden = !isDM || playerView;
   $('#pvBtn').hidden = !isDM;
   $('#pvBtn').setAttribute('aria-pressed', String(playerView));
   $('#roleChip').hidden = isDM || !db;
@@ -712,10 +709,6 @@ function setPlayerView(on) {
 }
 $('#pvBtn').addEventListener('click', () => setPlayerView(!playerView));
 $('#pvExit').addEventListener('click', () => setPlayerView(false));
-$('#dmBtn').addEventListener('click', () => {
-  dmMode = !dmMode; store.set('atlas-dm', dmMode ? '1' : '0'); applyDm(); renderPane(true);
-  toast(dmMode ? 'DM mode on. Character sheets and secrets are visible.' : 'DM mode off. Sheets and secrets are hidden.');
-});
 applyDm();
 // Drag and drop onto the map area
 const wrap = $('#mapwrap');
@@ -962,7 +955,7 @@ function npcHTML(n) {
     </div>
     ${visRow('npcs', n)}
     <div class="field"><label class="lbl" for="fNotes">${isDM ? 'Told to the party' + notesLbl() : 'What the party knows'}</label><textarea id="fNotes" data-f="npc:notes" placeholder="What they\u2019ve said, how they act, what the party has learned\u2026"${dis()}>${esc(n.notes)}</textarea></div>
-    ${showSheets() ? untoldHTML(n) + sheetHTML(n) : editable ? '<p class="muted">Turn on <b>DM mode</b> at the top to add a character sheet and secrets.</p>' : ''}
+    ${showSheets() ? untoldHTML(n) + sheetHTML(n) : ''}
     <div class="section"><h3>On the map</h3>
       ${onMap ? `<p class="muted">Pinned on <button type="button" class="link" data-act="goto-npc">${esc(onMap.name)}</button></p>` : '<p class="muted">Not pinned on any map.</p>'}
       ${editable && curMap ? `<div class="btnrow"><button type="button" data-act="pin-npc">${onMap ? 'Move pin to this map' : 'Pin on this map'}</button>${onMap ? '<button type="button" data-act="unpin-npc">Remove pin</button>' : ''}</div>` : ''}
