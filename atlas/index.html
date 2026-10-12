@@ -1285,11 +1285,12 @@ function castSpell(sp, chosen) {
 }
 
 /* ---------- Action ring ---------- */
-// The sheet that drives a token's actions: its own DM sheet, or the sheet of the player who moves it.
+// The sheet that drives a token's actions. A player-controlled token always uses that player's
+// character sheet; otherwise a DM token uses its own token sheet.
 function tokenSheetKey(t) {
   if (!t || t.npcId) return null;
-  if (CH.has('tok:' + t.id) && isDM) return 'tok:' + t.id;
   if (t.owner && CH.has(t.owner) && (t.owner === myId || isDM)) return t.owner;
+  if (CH.has('tok:' + t.id) && isDM) return 'tok:' + t.id;
   return null;
 }
 let ringFor = null, ringItems = [];
@@ -1857,6 +1858,13 @@ function refreshMembers() {
 }
 function tokenSheetHTML(t) {
   if (!editable || !myId) return '';
+  // Handed to a player: that player's character sheet is the one that counts.
+  if (t.owner && t.owner !== myId) {
+    const pc = CH.get(t.owner), who = memberName(t.owner);
+    return `<div class="field"><span class="lbl">Character sheet</span>${pc
+      ? `<button type="button" class="item" data-act="cs-open" data-uid="${esc(t.owner)}" style="border:1px solid var(--line)"><span class="face" style="border-color:${tokColor(t.color)}">${esc(initials(pc.name || who))}</span><span><span class="t">${esc(pc.name || who)}</span><span class="s">${esc(who)}\u2019s character</span></span><span class="chip">Open sheet</span></button>`
+      : `<p class="muted">${esc(who)} moves this token. Its actions come from their character sheet once they create one in the Party tab.</p>`}</div>`;
+  }
   const key = 'tok:' + t.id, c = CH.get(key);
   if (!c) return `<div class="field"><span class="lbl">Character sheet</span><div class="btnrow"><button type="button" data-act="cs-open" data-uid="${esc(key)}">Create sheet</button></div><p class="muted">Abilities, attacks and spells for this token. Only DMs can see it, and its rolls stay on DM screens.</p></div>`;
   const hp = c.hpMax ? `HP ${c.hp === '' || c.hp == null ? c.hpMax : c.hp}/${c.hpMax}` : '';
