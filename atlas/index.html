@@ -229,6 +229,9 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
 .pin.tok.movable { cursor: grab; }
 .pin.tok.sel .disc { outline: .18em solid var(--brass); outline-offset: .12em; }
 .pin.tok.hid .disc { opacity: .55; border-style: dashed; }
+.pin.tok .disc.img { background: var(--ti) center / cover no-repeat, var(--tc); color: transparent; border-color: var(--tc); border-width: .16em; }
+.tokpic { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.tokpic .pv { width: 64px; height: 64px; border-radius: 50%; border: 3px solid var(--tc); background: var(--ti) center / cover no-repeat, var(--tc); display: grid; place-items: center; color: var(--tok-ink); font-weight: 700; font-size: 1.3rem; flex: none; }
 .swatches { display: flex; gap: 6px; flex-wrap: wrap; }
 .sw { width: 28px; height: 28px; border-radius: 50%; padding: 0; background: var(--sw); border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--line); }
 .sw:hover { background: var(--sw); filter: brightness(1.1); }
@@ -292,6 +295,7 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
   </main>
 </div>
 <input type="file" id="fileIn" accept="image/*" class="sr" tabindex="-1" aria-hidden="true">
+<input type="file" id="tokImgIn" accept="image/*" class="sr" tabindex="-1" aria-hidden="true">
 <input type="file" id="sheetIn" accept="application/pdf,.pdf,image/*" class="sr" tabindex="-1" aria-hidden="true">
 <div class="toast" id="toast" role="status" hidden></div>
 
@@ -327,7 +331,8 @@ let db = null, assets = null, editable = false, isDM = false, loaded = { maps: f
 const PUB = { maps: new Map(), places: new Map(), npcs: new Map(), tokens: new Map() };
 const HID = { maps: new Map(), places: new Map(), npcs: new Map(), tokens: new Map() };
 const ALL = { maps: new Map(), places: new Map(), npcs: new Map(), tokens: new Map() };
-let MEMBERS = [], myId = null, myName = '';   // campaign members and who is viewing, when the host provides them
+let MEMBERS = [], myId = null, myName = '';
+let tokenImgs = null;   // the host's token-picture uploader, when it has one (players can use it too)   // campaign members and who is viewing, when the host provides them
 const SH = new Map();   // npc id -> { sheet, sheetFile }, readable by the DM only
 const PS = new Map();   // place id -> { secret }, readable by the DM only
 let D = ALL;
@@ -432,7 +437,10 @@ function snapTok(m, p, size) {
 const tokNpc = (t) => (t && t.npcId ? D.npcs.get(t.npcId) : null);
 const tokLabel = (t) => t.name || (tokNpc(t) ? tokNpc(t).name : t.npcId ? 'Unknown' : 'Token');
 const ATT_COLOR = { friendly: '#2f855a', hostile: '#c0392b', neutral: '#4a5568', unknown: '#b7791f' };
+// Only plain URLs and same-site paths are drawn as token pictures.
+const safeImg = (u) => (/^(https?:\/\/|\/)[\w\-./%~:?=&+]+$/.test(String(u || '')) ? String(u) : '');
 const canMoveTok = (t) => !!t && (editable || (!!myId && t.owner === myId && !isDM));
+const canPicture = (t) => canMoveTok(t) && !!(tokenImgs || (editable && assets));
 const childMaps = (placeId) => mapsList().filter((m) => m.placeId === placeId);
 function mapPath(mapId) {
   const out = []; const seen = new Set(); let m = D.maps.get(mapId);
@@ -764,6 +772,43 @@ async function uploadSheet(file, npcId) {
     toast(`Sheet attached to ${n.name}.`);
   }
 }
+/* ---------- Token pictures ---------- */
+let tokImgFor = null;
+$('#tokImgIn').addEventListener('change', (e) => { const f = e.target.files[0]; if (f && tokImgFor) uploadTokenImage(f, tokImgFor); });
+// Centre-crops to a 256x256 square so pictures stay small however big the original is.
+async function squareImage(file) {
+  const { im, u } = await loadImg(file);
+  try {
+    const side = Math.min(im.naturalWidth, im.naturalHeight);
+    if (!side) throw new Error('decode');
+    const c = document.createElement('canvas'); c.width = c.height = 256;
+    c.getContext('2d').drawImage(im, (im.naturalWidth - side) / 2, (im.naturalHeight - side) / 2, side, side, 0, 0, 256, 256);
+    let blob = await new Promise((r) => c.toBlob(r, 'image/webp', .85));
+    if (!blob || blob.type !== 'image/webp') blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+    if (!blob) throw new Error('decode');
+    return blob;
+  } finally { URL.revokeObjectURL(u); }
+}
+async function uploadTokenImage(file, tokId) {
+  const t = D.tokens.get(tokId);
+  if (!t || !canPicture(t)) { toast('You can only change pictures on your own tokens.', true); return; }
+  let blob;
+  try { blob = await squareImage(file); } catch (e) { toast('That file couldn’t be read as a picture. Try a PNG or JPEG.', true); return; }
+  toast('Uploading picture…');
+  let up;
+  try { up = tokenImgs ? await tokenImgs.upload(blob, { type: blob.type }) : await assets.upload(blob, { type: blob.type }); }
+  catch (e) { toast(e && e.message ? e.message : 'The picture didn’t upload. Try again in a moment.', true); return; }
+  const cur = D.tokens.get(tokId); if (!cur) return;
+  const old = cur.img;
+  D.tokens.set(tokId, { ...cur, img: up.url }); render(true);
+  if (await patch('tokens', tokId, { img: up.url })) {
+    if (old && old !== up.url) deleteTokenImage(old);
+    toast('Picture added.');
+  }
+}
+function deleteTokenImage(url) {
+  try { (tokenImgs ? tokenImgs.delete(url) : assets && assets.delete(url)).catch(() => {}); } catch (e) {}
+}
 function applyDm() {
   $('#pvBtn').hidden = !isDM;
   $('#pvBtn').setAttribute('aria-pressed', String(playerView));
@@ -871,7 +916,7 @@ function pinsHTML() {
     const g = gridOf(m), d = g.cell * (t.size || 1) * .9;
     const isSel = sel && sel.kind === 'token' && sel.id === t.id;
     return `<button type="button" class="pin tok${isSel ? ' sel' : ''}${t._h ? ' hid' : ''}${canMoveTok(t) ? ' movable' : ''}" data-kind="token" data-id="${t.id}" style="left:${t.x * 100}%;top:${t.y * 100}%;width:${d}px;height:${d}px;font-size:${Math.max(6, g.cell * .3)}px;--tc:${tokColor(t.color)}" aria-label="Token: ${esc(tokLabel(t))}">
-      <span class="disc">${esc(initials(tokLabel(t)))}</span><span class="nm">${esc(tokLabel(t))}</span></button>`;
+      <span class="disc${safeImg(t.img) ? ' img' : ''}"${safeImg(t.img) ? ` style="--ti:url('${esc(safeImg(t.img))}')"` : ''}>${esc(initials(tokLabel(t)))}</span><span class="nm">${esc(tokLabel(t))}</span></button>`;
   }) : [];
   return places.join('') + npcs.join('') + toks.join('');
 }
@@ -1055,7 +1100,13 @@ function tokenHTML(t) {
     <div class="field"><label class="lbl" for="fName">Name</label><input id="fName" value="${esc(t.name)}" maxlength="40" placeholder="${esc(npc ? npc.name + ' (from the NPC)' : '')}" data-f="token:name"${d}></div>
     ${editable ? `<div class="field"><label class="lbl" for="tNpc">Linked NPC</label><select id="tNpc" data-f="token:npcId"><option value="">None</option>${[...D.npcs.values()].sort((a, b) => a.name.localeCompare(b.name)).map((n) => `<option value="${esc(n.id)}"${t.npcId === n.id ? ' selected' : ''}>${esc(n.name)}</option>`).join('')}</select></div>` : ''}
     ${npc ? npcCard(npc) : ''}
-    <div class="field"><span class="lbl">Colour</span><div class="swatches">${TOKEN_COLORS.map((c) => `<button type="button" class="sw${tokColor(t.color) === c ? ' on' : ''}" style="--sw:${c}" data-act="tok-color" data-color="${c}" aria-label="Colour ${c}"${d}></button>`).join('')}</div></div>
+    <div class="field"><span class="lbl">Picture</span>
+      <div class="tokpic"><span class="pv" style="--tc:${tokColor(t.color)}${safeImg(t.img) ? `;--ti:url('${esc(safeImg(t.img))}')` : ''}">${safeImg(t.img) ? '' : esc(initials(tokLabel(t)))}</span>
+        ${canPicture(t) ? `<div class="btnrow"><label class="btn" for="tokImgIn" data-act="tok-img">${t.img ? 'Change picture' : 'Upload picture'}</label>${t.img ? '<button type="button" data-act="tok-img-rm">Remove</button>' : ''}</div>` : ''}
+      </div>
+      ${canPicture(t) && !t.img ? '<p class="muted">A portrait or top-down token art. It\u2019s cropped to a circle.</p>' : ''}
+    </div>
+    <div class="field"><span class="lbl">${t.img ? 'Ring colour' : 'Colour'}</span><div class="swatches">${TOKEN_COLORS.map((c) => `<button type="button" class="sw${tokColor(t.color) === c ? ' on' : ''}" style="--sw:${c}" data-act="tok-color" data-color="${c}" aria-label="Colour ${c}"${d}></button>`).join('')}</div></div>
     ${editable ? `<div class="row2">
         <div class="field"><label class="lbl" for="tSize">Size</label><select id="tSize" data-f="token:size">${TOKEN_SIZES.map(([v, l]) => `<option value="${v}"${(t.size || 1) === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
         <div class="field"><label class="lbl" for="tOwner">Moved by</label><select id="tOwner" data-f="token:owner"><option value="">DMs only</option>${ownerOptions(t)}</select></div>
@@ -1158,6 +1209,7 @@ function webHTML() {
 }
 let paneDirty = false;
 function renderPane(force) {
+  if (sel && sel.kind === 'token' && editable) refreshMembers();   // the host throttles this, so it's cheap
   const pane = $('#pane');
   if (!force && pane.contains(document.activeElement) && document.activeElement.matches('input, textarea, select')) { paneDirty = true; return; }
   paneDirty = false;
@@ -1257,6 +1309,11 @@ $('#pane').addEventListener('click', (e) => {
     D.npcs.set(o.id, { ...o, links }); renderPane(true); patch('npcs', o.id, { links });
   }
   else if (act === 'del-place' && cur) arm(b, 'dp' + cur.id, 'Click again to delete', () => deletePlace(cur.id));
+  else if (act === 'tok-img' && cur) { tokImgFor = cur.id; $('#tokImgIn').value = ''; }
+  else if (act === 'tok-img-rm' && cur && canPicture(cur)) {
+    const old = cur.img; D.tokens.set(cur.id, { ...cur, img: null }); render(true);
+    patch('tokens', cur.id, { img: null }).then((ok) => { if (ok && old) deleteTokenImage(old); });
+  }
   else if (act === 'tok-color' && cur && canMoveTok(cur)) {
     const color = b.dataset.color; D.tokens.set(cur.id, { ...cur, color }); render(true); patch('tokens', cur.id, { color });
   }
@@ -1337,6 +1394,7 @@ render();
     if (u && u.name) myName = await u.name();
     if (u && u.members) MEMBERS = await u.members();
     userCap = u;
+    tokenImgs = await c.use('tokenImages').catch(() => null);
   } catch (e) {}
   if (isDM && !assets) console.warn('Atlas: assets capability unavailable in this view; map uploads disabled.');
   ['maps', 'places', 'npcs', 'tokens'].forEach((col) => subscribe(col, false));
