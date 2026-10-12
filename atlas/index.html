@@ -636,6 +636,7 @@ async function pinNpc(id, p) {
 }
 
 function select(kind, id, noCenter) {
+  if (kind === 'token') refreshMembers();
   sel = { kind, id }; tab = 'details';
   const rec = kind === 'place' ? D.places.get(id) : kind === 'token' ? D.tokens.get(id) : D.npcs.get(id);
   if (rec && rec.mapId && rec.mapId !== curMap && D.maps.has(rec.mapId)) { openMap(rec.mapId, true); }
@@ -1057,11 +1058,30 @@ function tokenHTML(t) {
     <div class="field"><span class="lbl">Colour</span><div class="swatches">${TOKEN_COLORS.map((c) => `<button type="button" class="sw${tokColor(t.color) === c ? ' on' : ''}" style="--sw:${c}" data-act="tok-color" data-color="${c}" aria-label="Colour ${c}"${d}></button>`).join('')}</div></div>
     ${editable ? `<div class="row2">
         <div class="field"><label class="lbl" for="tSize">Size</label><select id="tSize" data-f="token:size">${TOKEN_SIZES.map(([v, l]) => `<option value="${v}"${(t.size || 1) === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
-        <div class="field"><label class="lbl" for="tOwner">Moved by</label><select id="tOwner" data-f="token:owner"><option value="">DMs only</option>${MEMBERS.filter((x) => x.role === 'player').map((x) => `<option value="${esc(x.id)}"${t.owner === x.id ? ' selected' : ''}>${esc(x.username)}</option>`).join('')}</select></div>
+        <div class="field"><label class="lbl" for="tOwner">Moved by</label><select id="tOwner" data-f="token:owner"><option value="">DMs only</option>${ownerOptions(t)}</select></div>
       </div>
+      ${MEMBERS.length && !MEMBERS.some((x) => x.role === 'player') ? '<p class="muted">No players have joined yet. Invite them from <b>Members</b> at the top, then pick who moves this token.</p>' : ''}
       ${visRow('tokens', t)}`
     : `<p class="muted">${owner ? `Moved by ${esc(owner.username)}.` : 'Moved by the DM.'}${can ? ' Drag it on the map to move it.' : ''}</p>`}
     ${editable || (can && t.createdBy === myId) ? '<div class="section"><div class="btnrow"><button type="button" class="danger" data-act="del-token">Remove token</button></div></div>' : ''}`;
+}
+// Players in the campaign, plus whoever currently has the token if they're no longer a player.
+function ownerOptions(t) {
+  const players = MEMBERS.filter((x) => x.role === 'player');
+  const opts = players.map((x) => `<option value="${esc(x.id)}"${t.owner === x.id ? ' selected' : ''}>${esc(x.username)}</option>`);
+  if (t.owner && !players.some((x) => x.id === t.owner)) {
+    const who = MEMBERS.find((x) => x.id === t.owner);
+    opts.push(`<option value="${esc(t.owner)}" selected>${esc(who ? who.username + ' (not a player)' : 'Someone who left')}</option>`);
+  }
+  return opts.join('');
+}
+// The member list can change while the page is open (someone joins), so refresh it when a token is opened.
+let userCap = null;
+function refreshMembers() {
+  if (!userCap || !userCap.members) return;
+  userCap.members().then((m) => {
+    if (JSON.stringify(m) !== JSON.stringify(MEMBERS)) { MEMBERS = m; renderPane(true); }
+  }).catch(() => {});
 }
 function tokensSection(n) {
   const toks = [...D.tokens.values()].filter((t) => t.npcId === n.id);
@@ -1316,6 +1336,7 @@ render();
     if (u && u.id) myId = await u.id();
     if (u && u.name) myName = await u.name();
     if (u && u.members) MEMBERS = await u.members();
+    userCap = u;
   } catch (e) {}
   if (isDM && !assets) console.warn('Atlas: assets capability unavailable in this view; map uploads disabled.');
   ['maps', 'places', 'npcs', 'tokens'].forEach((col) => subscribe(col, false));
