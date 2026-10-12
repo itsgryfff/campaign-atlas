@@ -174,6 +174,8 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
 .graph text { font-family: var(--body); fill: var(--ink); }
 .graph .edge { stroke: var(--rel); stroke-width: 2.5; fill: none; }
 .graph .edge.r-hostile { stroke-dasharray: 7 4; }
+.graph .edge.party { opacity: .5; stroke-width: 2; }
+.link-row .pby { display: block; font-size: .75rem; color: var(--muted); }
 .graph .edge.r-rival { stroke-dasharray: 2 4; stroke-linecap: round; }
 .graph .elab { font-size: 9px; fill: var(--muted); paint-order: stroke; stroke: var(--hover); stroke-width: 3px; }
 .graph .node.focus circle { fill: var(--tint); stroke-width: 4; }
@@ -476,6 +478,8 @@ const ALL = { maps: new Map(), places: new Map(), npcs: new Map(), tokens: new M
 let MEMBERS = [], myId = null, myName = '';
 let tokenImgs = null;
 let rollsCap = null;
+let linksCap = null;    // the host's party-connections writer, when it has one
+const PL = new Map();   // party connections: id -> { a, b, rel, label, by, byName, at }
 let notesCap = null;    // the host's party-notes writer, when it has one
 const PN = new Map();   // 'npc:<id>' or 'place:<id>' -> { entries: [{ id, by, byName, text, at }] }    // the host's shared roll feed, when it has one   // the host's token-picture uploader, when it has one (players can use it too)   // campaign members and who is viewing, when the host provides them
 const SH = new Map();   // npc id -> { sheet, sheetFile }, readable by the DM only
@@ -1610,6 +1614,7 @@ async function deleteNpc(id) {
       const links = o.links.filter((l) => l.to !== id); D.npcs.set(o.id, { ...o, links }); await patch('npcs', o.id, { links });
     }
   }
+  for (const [pid, l] of [...PL]) if (l.a === id || l.b === id) { PL.delete(pid); try { await db.collection('partylinks').doc(pid).delete(); } catch (e) {} }
   for (const t of [...ALL.tokens.values()].filter((t) => t.npcId === id)) {
     const fix = { npcId: null, name: t.name || n.name };
     D.tokens.set(t.id, { ...t, ...fix }); await patch('tokens', t.id, fix);
@@ -1798,6 +1803,11 @@ function linksOf(n) {
     if (o.id === n.id) continue;
     for (const l of o.links || []) if (l.to === n.id) out.push({ other: o, label: l.label, rel: relOf(l), owner: o.id, to: n.id, rev: true });
   }
+  // Connections the party added, kept apart from the DM's own.
+  for (const [pid, l] of PL) {
+    const otherId = l.a === n.id ? l.b : l.b === n.id ? l.a : null;
+    if (otherId && D.npcs.has(otherId)) out.push({ other: D.npcs.get(otherId), label: l.label, rel: relOf(l), party: true, pid, by: l.by, byName: l.byName, rev: l.b === n.id });
+  }
   return out;
 }
 const ABIL = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
@@ -1942,6 +1952,14 @@ function tokensSection(n) {
   </div>`;
 }
 function linkRowHTML(l) {
+  if (l.party) {
+    const mine = !!myId && l.by === myId;
+    const kind = mine && linksCap
+      ? `<select class="relsel r-${l.rel}" data-plink="${esc(l.pid)}" aria-label="Relationship with ${esc(l.other.name)}">${RELS.map(([v, t]) => `<option value="${v}"${v === l.rel ? ' selected' : ''}>${t}</option>`).join('')}</select>`
+      : `<span class="relchip r-${l.rel}">${relName(l.rel)}</span>`;
+    return `<div class="link-row party"><div class="who"><button type="button" class="link" data-sel="npc" data-id="${l.other.id}">${esc(l.other.name)}</button> <span class="lab">${esc(l.label || '')}</span><span class="pby">Added by ${esc(mine ? 'you' : l.byName || 'the party')}</span></div>
+      <div class="acts">${kind}${(mine || isDM) && linksCap ? `<button type="button" class="x" data-act="plink-del" data-id="${esc(l.pid)}" aria-label="Delete connection with ${esc(l.other.name)}">×</button>` : ''}</div></div>`;
+  }
   const kind = editable
     ? `<select class="relsel r-${l.rel}" data-rel-owner="${l.owner}" data-rel-to="${l.to}" aria-label="Relationship with ${esc(l.other.name)}">${RELS.map(([v, t]) => `<option value="${v}"${v === l.rel ? ' selected' : ''}>${t}</option>`).join('')}</select>`
     : `<span class="relchip r-${l.rel}">${relName(l.rel)}</span>`;
@@ -1975,6 +1993,7 @@ function npcHTML(n) {
     ${tokensSection(n)}
     <div class="section"><div class="section-head"><h3>Connections (${links.length})</h3><button type="button" data-act="web-npc" data-id="${n.id}">View web</button></div>
       ${links.length ? `<div class="links">${links.map(linkRowHTML).join('')}</div>` : '<p class="muted">No connections yet.</p>'}
+      ${!editable && linksCap && myId && others.length ? `<form class="addlink rel3" id="plinkForm"><select id="pTo" aria-label="Connect to">${others.map((o) => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select><select id="pRel" aria-label="Relationship type">${RELS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select><input id="pLabel" maxlength="80" placeholder="What the party thinks, like works for (optional)" aria-label="Relationship details"><button type="submit">Add</button></form><p class="muted">Connections you add are shared with the whole party.</p>` : ''}
       ${editable && others.length ? `<form class="addlink rel3" id="linkForm"><select id="lTo" aria-label="Connect to">${others.map((o) => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select><select id="lRel" aria-label="Relationship type">${RELS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select><input id="lLabel" placeholder="Details, like owes money to (optional)" aria-label="Relationship details"><button type="submit">Add</button></form>` : ''}
     </div>
     ${editable ? `<div class="section"><div class="btnrow"><button type="button" class="danger" data-act="del-npc">Delete NPC</button></div></div>` : ''}`;
@@ -2020,7 +2039,7 @@ function webHTML() {
     const text = l.label || relName(l.rel);
     // Label sits on the line, halfway along (the midpoint of a quadratic curve is half its bend out).
     const lx = (cx + q.x) / 2 - (dy / len) * bend / 2, ly = (cy + q.y) / 2 + (dx / len) * bend / 2;
-    return `<path class="edge r-${l.rel}" d="M${cx} ${cy} Q${mx} ${my} ${q.x} ${q.y}"><title>${esc(l.rev ? `${l.other.name} → ${n.name}` : `${n.name} → ${l.other.name}`)}: ${esc(relName(l.rel))}${l.label ? ' · ' + esc(l.label) : ''}</title></path>` +
+    return `<path class="edge r-${l.rel}${l.party ? ' party' : ''}" d="M${cx} ${cy} Q${mx} ${my} ${q.x} ${q.y}"><title>${esc(l.rev ? `${l.other.name} → ${n.name}` : `${n.name} → ${l.other.name}`)}: ${esc(relName(l.rel))}${l.label ? ' · ' + esc(l.label) : ''}${l.party ? ` (added by ${esc(l.byName || 'the party')})` : ''}</title></path>` +
       `<text class="elab" x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle">${esc(text.length > 20 ? text.slice(0, 19) + '…' : text)}</text>`;
   }).join('');
   const nh = others.map((o) => {
@@ -2037,6 +2056,7 @@ function webHTML() {
   return `${head}
     <svg class="graph" viewBox="0 0 ${S} ${S}" role="img" aria-label="${esc(n.name)}’s connections">${eh}${nh}${center}</svg>
     ${relLegend(new Set(links.map((l) => l.rel)))}
+    ${links.some((l) => l.party) ? '<p class="muted">Faded lines are connections the party added.</p>' : ''}
     <p class="muted">Line colours show how they feel about each other; circle colours show their attitude to the party. Select someone around ${esc(n.name)} to see their connections.</p>
     <div class="links">${links.map(linkRowHTML).join('')}</div>`;
 }
@@ -2058,6 +2078,12 @@ document.querySelector('.tabs').addEventListener('click', (e) => { const b = e.t
 
 /* ---------- Rail events ---------- */
 $('#pane').addEventListener('change', async (e) => {
+  if (e.target.dataset.plink && linksCap) {
+    const id = e.target.dataset.plink, l = PL.get(id); if (!l) return;
+    PL.set(id, { ...l, rel: e.target.value }); renderPane(true);
+    linksCap.edit(id, e.target.value, l.label || '').catch((err) => toast(err.message || 'That change didn\u2019t save.', true));
+    return;
+  }
   if (e.target.dataset.relOwner && editable) {
     const o = D.npcs.get(e.target.dataset.relOwner); if (!o) return;
     const links = (o.links || []).map((l) => (l.to === e.target.dataset.relTo ? { ...l, rel: e.target.value } : l));
@@ -2127,6 +2153,17 @@ $('#pane').addEventListener('submit', async (e) => {
     const inp = $('#uText'); if (inp) inp.focus();
     await done; return;
   }
+  if (e.target.id === 'plinkForm') {
+    e.preventDefault();
+    const n = D.npcs.get(sel && sel.id); const to = $('#pTo').value;
+    if (!n || !to || !linksCap) return;
+    const rel = $('#pRel').value, label = $('#pLabel').value.trim();
+    // Show it straight away; the saved copy replaces this draft when it comes back.
+    const draft = 'draft-' + uid();
+    PL.set(draft, { a: n.id, b: to, rel, label, by: myId, byName: myName, at: Date.now() }); renderPane(true);
+    linksCap.add(n.id, to, rel, label).catch((err) => { PL.delete(draft); renderPane(true); toast(err.message || 'That connection didn\u2019t save. Try again.', true); });
+    return;
+  }
   if (e.target.id !== 'linkForm') return; e.preventDefault();
   const n = D.npcs.get(sel && sel.id); const to = $('#lTo').value; const label = $('#lLabel').value.trim(); const rel = $('#lRel').value;
   if (!n || !to) return;
@@ -2147,6 +2184,10 @@ $('#pane').addEventListener('click', (e) => {
   if (act === 'back') { sel = null; render(true); }
   else if (act === 'web-npc') { webFocus = b.dataset.id; tab = 'web'; renderPane(true); $('#pane').scrollTop = 0; }
   else if (act === 'web-list') { webFocus = null; renderPane(true); }
+  else if (act === 'plink-del' && linksCap) arm(b, 'pl' + b.dataset.id, 'Delete?', () => {
+    const id = b.dataset.id; const old = PL.get(id); PL.delete(id); renderPane(true);
+    linksCap.delete(id).catch((err) => { if (old) PL.set(id, old); renderPane(true); toast(err.message || 'That connection wasn\u2019t deleted.', true); });
+  });
   else if (act === 'add-child' && cur) armUpload(cur.id);
   else if (act === 'npc-here' && cur) createNpc({ placeId: cur.id });
   else if (act === 'new-npc') createNpc({});
@@ -2273,6 +2314,7 @@ render();
     tokenImgs = await c.use('tokenImages').catch(() => null);
     rollsCap = await c.use('rolls').catch(() => null);
     notesCap = await c.use('partyNotes').catch(() => null);
+    linksCap = await c.use('partyLinks').catch(() => null);
   } catch (e) {}
   if (isDM && !assets) console.warn('Atlas: assets capability unavailable in this view; map uploads disabled.');
   ['maps', 'places', 'npcs', 'tokens'].forEach((col) => subscribe(col, false));
@@ -2282,6 +2324,10 @@ render();
     subscribeSecrets('dm/sheets/places', PS);
   }
   // Character sheets: the host sends a player only their own; DMs get everyone's.
+  db.collection('partylinks').onSnapshot((snap) => {
+    PL.clear(); snap.docs.forEach((d) => PL.set(d.id, d.data()));
+    renderPane();
+  }, onSnapErr);
   db.collection('partynotes').onSnapshot((snap) => {
     PN.clear(); snap.docs.forEach((d) => PN.set(d.id, d.data()));
     renderPane();
