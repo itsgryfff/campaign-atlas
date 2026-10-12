@@ -1,0 +1,1175 @@
+<title>Campaign Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: the map fills the left like a table spread; a ledger rail on the right holds details, the NPC roster and the web of connections. */
+:root {
+  --bg: #e6ebef;
+  --surface: #f8fafb;
+  --hover: #edf1f5;
+  --ink: #1a2330;
+  --muted: #5a6879;
+  --line: #c8d1da;
+  --grid: rgba(43, 76, 140, .07);
+  --accent: #2b4c8c;
+  --on-accent: #ffffff;
+  --brass: #a8740f;
+  --tint: #fbf3df;
+  --bad: #b3261e;
+  --good: #2a7a4b;
+  --well: #d9e0e6;
+  --shadow: rgba(16, 24, 36, .28);
+  --display: "Cinzel", "Trajan Pro", Georgia, serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151b; --surface: #19202a; --hover: #212a36; --ink: #e2e7ee; --muted: #8e9bad; --line: #2c3543;
+    --grid: rgba(143, 176, 236, .05); --accent: #8fb0ec; --on-accent: #0f1726; --brass: #e2b24c; --tint: #2a2516;
+    --bad: #f2776c; --good: #6fcf97; --well: #0c1015; --shadow: rgba(0, 0, 0, .55); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151b; --surface: #19202a; --hover: #212a36; --ink: #e2e7ee; --muted: #8e9bad; --line: #2c3543;
+  --grid: rgba(143, 176, 236, .05); --accent: #8fb0ec; --on-accent: #0f1726; --brass: #e2b24c; --tint: #2a2516;
+  --bad: #f2776c; --good: #6fcf97; --well: #0c1015; --shadow: rgba(0, 0, 0, .55); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.45;
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.app { max-width: 1480px; margin: 0 auto; padding: 16px 16px 32px; display: grid; gap: 12px; }
+h1, h2, h3 { font-family: var(--display); margin: 0; text-wrap: balance; letter-spacing: .02em; }
+h1 { font-size: 1.5rem; }
+h2 { font-size: 1.1rem; }
+h3 { font-size: .8rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-family: var(--body); font-weight: 700; }
+.lbl { font-size: .7rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 700; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: .4rem .7rem;
+  cursor: pointer; font-weight: 600; font-size: .85rem; line-height: 1.2;
+}
+button:hover { background: var(--hover); }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+/* Upload controls are labels tied to the file input, so a tap opens the picker directly. */
+label.btn { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: .4rem .7rem; cursor: pointer; font-weight: 600; font-size: .85rem; line-height: 1.2; }
+label.btn:hover { background: var(--hover); }
+label.btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+label.btn:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+button.danger { color: var(--bad); }
+button.armed { background: var(--bad); color: var(--surface); border-color: var(--bad); }
+button.link { border: 0; background: none; padding: 0; color: var(--accent); font-weight: 600; text-align: left; }
+button.link:hover { text-decoration: underline; background: none; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+input, select, textarea { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: .4rem .55rem; min-width: 0; width: 100%; }
+textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
+
+/* Header */
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+.brand { min-width: 0; }
+.brand p { margin: 0; color: var(--muted); font-size: .85rem; }
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; flex: 1 1 280px; min-width: 0; font-size: .9rem; }
+.crumbs button { border: 0; background: none; padding: .2rem .3rem; color: var(--accent); }
+.crumbs .sep { color: var(--muted); }
+.crumbs .here { font-weight: 700; padding: .2rem .3rem; }
+.topctl { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.topctl select { width: auto; max-width: 240px; }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 12px; align-items: start; }
+@media (max-width: 980px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+/* Map viewport */
+.mapwrap { position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--well); height: min(78vh, 860px); min-height: 420px; }
+@media (max-width: 980px) { .mapwrap { height: 64vh; min-height: 360px; } }
+.viewport { position: absolute; inset: 0; overflow: hidden; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+.viewport.panning { cursor: grabbing; }
+.viewport.adding { cursor: crosshair; }
+.stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; --inv: 1; }
+.stage img { display: block; pointer-events: none; -webkit-user-drag: none; box-shadow: 0 2px 18px var(--shadow); }
+.pins { position: absolute; inset: 0; }
+
+.pin { position: absolute; padding: 0; border: 0; background: none; cursor: pointer; transform: translate(-50%, -100%) scale(var(--inv)); transform-origin: 50% 100%; }
+.pin:hover { background: none; }
+.pin .mk { display: block; width: 34px; height: 42px; filter: drop-shadow(0 2px 3px var(--shadow)); }
+.pin .mk path.body { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.pin .mk path.glyph { fill: var(--on-accent); }
+.pin.t-dungeon .mk path.body { fill: var(--bad); }
+.pin.t-landmark .mk path.body, .pin.t-wilderness .mk path.body { fill: var(--good); }
+.pin.t-poi .mk path.body { fill: var(--brass); }
+.pin .nm { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); margin-top: 2px; white-space: nowrap; font-size: 12px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); pointer-events: none; }
+.hidelabels .pin .nm { display: none; }
+.pin.npc { transform: translate(-50%, -50%) scale(var(--inv)); transform-origin: 50% 50%; }
+.face { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; font-weight: 700; font-size: 12px; background: var(--surface); color: var(--ink); border: 3px solid var(--muted); box-shadow: 0 2px 4px var(--shadow); letter-spacing: .02em; }
+.att-friendly .face, .face.att-friendly { border-color: var(--good); }
+.att-hostile .face, .face.att-hostile { border-color: var(--bad); }
+.att-unknown .face, .face.att-unknown { border-color: var(--brass); }
+.pin.sel .mk { filter: drop-shadow(0 0 0 var(--brass)) drop-shadow(0 0 4px var(--brass)); }
+.pin.sel .face { outline: 3px solid var(--brass); outline-offset: 2px; }
+.pin.sel .nm { border-color: var(--brass); }
+.pin.dragging { opacity: .75; }
+.mapbadge { position: absolute; right: -8px; top: -6px; width: 20px; height: 20px; border-radius: 50%; background: var(--brass); border: 2px solid var(--surface); display: grid; place-items: center; box-shadow: 0 1px 3px var(--shadow); }
+.mapbadge svg { width: 12px; height: 12px; fill: none; stroke: var(--surface); stroke-width: 1.6; stroke-linejoin: round; }
+.pin.has-map .nm { border-color: var(--brass); }
+.pin.has-map:hover .mk { transform: translateY(-2px); }
+.pin .mk { transition: transform .15s ease; }
+.upbtn { display: flex; align-items: center; gap: 4px; }
+
+.mapbar { position: absolute; left: 10px; top: 10px; right: 10px; display: flex; flex-wrap: wrap; gap: 6px; pointer-events: none; z-index: 2; }
+.mapbar > * { pointer-events: auto; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); box-shadow: 0 1px 4px var(--shadow); }
+.seg button { border: 0; border-radius: 0; border-right: 1px solid var(--line); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+.hintbar { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 6px 12px; border-radius: 999px; font-size: .85rem; font-weight: 600; z-index: 2; max-width: calc(100% - 24px); text-align: center; }
+.mapempty { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; }
+.mapempty .inner { max-width: 420px; display: grid; gap: 10px; justify-items: center; }
+.mapempty p { margin: 0; color: var(--muted); }
+.dropzone { position: absolute; inset: 0; border: 3px dashed var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); display: grid; place-items: center; font-weight: 700; font-size: 1.1rem; color: var(--accent); z-index: 3; pointer-events: none; }
+
+/* Side rail */
+.rail { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; min-width: 0; display: grid; }
+.tabs { display: flex; border-bottom: 1px solid var(--line); }
+.tabs button { flex: 1; border: 0; border-radius: 0; background: none; padding: .7rem .5rem; color: var(--muted); border-bottom: 2px solid transparent; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--brass); }
+.pane { padding: 14px 16px 18px; display: grid; gap: 14px; align-content: start; max-height: calc(min(78vh, 860px) - 46px); overflow-y: auto; }
+@media (max-width: 980px) { .pane { max-height: none; } }
+.field { display: grid; gap: 4px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kicker { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.chip { font-size: .72rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--hover); font-weight: 700; }
+.chip.ex { border-color: var(--brass); color: var(--brass); background: var(--tint); }
+.list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 6px; cursor: pointer; border: 0; background: none; text-align: left; font-weight: 400; width: 100%; }
+.item:hover { background: var(--hover); }
+.item .t { font-weight: 700; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item .s { color: var(--muted); font-size: .8rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item .face { width: 30px; height: 30px; font-size: 11px; border-width: 2px; box-shadow: none; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+.dot.t-dungeon { background: var(--bad); } .dot.t-landmark, .dot.t-wilderness { background: var(--good); } .dot.t-poi { background: var(--brass); }
+.muted { color: var(--muted); font-size: .88rem; margin: 0; }
+.section { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.links { display: grid; gap: 4px; }
+.link-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 4px 0; }
+.link-row .who { min-width: 0; }
+.link-row .lab { color: var(--muted); font-size: .85rem; }
+.addlink { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 6px; }
+.x { border: 0; background: none; color: var(--muted); padding: .2rem .4rem; font-size: 1rem; }
+.btnrow { display: flex; gap: 6px; flex-wrap: wrap; }
+.search { display: flex; gap: 6px; }
+.banner { background: var(--tint); border: 1px solid var(--brass); border-radius: 8px; padding: 10px 12px; display: grid; gap: 8px; font-size: .88rem; }
+.banner p { margin: 0; }
+
+.graph { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 8px; background: var(--hover); }
+.graph text { font-family: var(--body); fill: var(--ink); }
+.graph .edge { stroke: var(--muted); stroke-width: 1.5; }
+.graph .edge.hot { stroke: var(--brass); stroke-width: 2.5; }
+.graph .elab { font-size: 9px; fill: var(--muted); paint-order: stroke; stroke: var(--hover); stroke-width: 3px; }
+.graph .elab.hot { fill: var(--ink); font-weight: 700; }
+.graph .node { cursor: pointer; }
+.graph .node circle { fill: var(--surface); stroke: var(--muted); stroke-width: 3; }
+.graph .node.att-friendly circle { stroke: var(--good); }
+.graph .node.att-hostile circle { stroke: var(--bad); }
+.graph .node.att-unknown circle { stroke: var(--brass); }
+.graph .node.sel circle { fill: var(--tint); }
+.graph .node .ini { font-size: 11px; font-weight: 700; }
+.graph .node .gname { font-size: 10px; font-weight: 600; paint-order: stroke; stroke: var(--hover); stroke-width: 3px; }
+.legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: .78rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 4px; }
+.legend i { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--muted); display: inline-block; }
+.legend i.f { border-color: var(--good); } .legend i.h { border-color: var(--bad); } .legend i.u { border-color: var(--brass); }
+
+.dmtoggle[aria-pressed="true"] { background: var(--brass); color: var(--surface); border-color: var(--brass); }
+.dm .top { border-color: var(--brass); box-shadow: inset 0 0 0 1px var(--brass); }
+.chip.dm { border-color: var(--brass); color: var(--brass); background: var(--tint); }
+.sheet-top { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.abil { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.ab { display: grid; gap: 3px; justify-items: center; text-align: center; border: 1px solid var(--line); border-radius: 6px; padding: 6px 4px; background: var(--hover); min-width: 0; }
+.ab input { text-align: center; padding: .25rem .1rem; font-family: var(--mono); }
+.modbtn { font-family: var(--mono); padding: .15rem .3rem; font-size: .8rem; width: 100%; }
+.attach { display: grid; gap: 8px; }
+.attach img { max-height: 220px; width: 100%; object-fit: contain; border: 1px solid var(--line); border-radius: 6px; background: var(--hover); }
+.btnlink { display: inline-block; border: 1px solid var(--line); border-radius: 6px; padding: .4rem .7rem; font-weight: 600; font-size: .85rem; color: var(--accent); text-decoration: none; background: var(--surface); }
+.btnlink:hover { background: var(--hover); }
+@media (max-width: 440px) { .abil { grid-template-columns: repeat(3, minmax(0, 1fr)); } .sheet-top { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pin.hid { opacity: .6; }
+.pin.hid .nm { border-style: dashed; }
+.pin.hid .nm::before { content: "Hidden \00b7  "; color: var(--muted); font-weight: 600; }
+.chip.hid { border-style: dashed; color: var(--muted); }
+.vis { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.vis input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--accent); }
+.vis b { display: block; font-size: .9rem; }
+.vis small { color: var(--muted); font-size: .8rem; }
+.vis.off { border-style: dashed; background: var(--hover); }
+.pvtoggle[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.pvbanner { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; background: var(--accent); color: var(--on-accent); padding: 8px 12px; border-radius: 8px; font-size: .88rem; font-weight: 600; box-shadow: 0 2px 8px var(--shadow); }
+.pvbanner button { background: var(--surface); color: var(--ink); border-color: var(--surface); }
+.rolechip { font-size: .72rem; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--accent); color: var(--accent); font-weight: 700; }
+.lbl .aside { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.untold { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.untold li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; align-items: center; padding: 6px 6px 6px 10px; border: 1px dashed var(--brass); border-radius: 6px; background: var(--tint); }
+.untold li span { overflow-wrap: anywhere; white-space: pre-wrap; }
+.untold li button { font-size: .78rem; padding: .3rem .5rem; }
+.addline { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+.toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: .9rem; z-index: 20; max-width: calc(100% - 32px); box-shadow: 0 4px 14px var(--shadow); }
+.toast.err { background: var(--bad); color: var(--surface); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <h1>Campaign Atlas</h1>
+      <p>Your maps, the places on them, and the people who live there</p>
+    </div>
+    <nav class="crumbs" id="crumbs" aria-label="Map path"></nav>
+    <div class="topctl">
+      <label class="sr" for="mapSel">Open map</label>
+      <select id="mapSel"></select>
+      <span class="rolechip" id="roleChip" hidden>Player view</span>
+      <button type="button" class="pvtoggle" id="pvBtn" aria-pressed="false" hidden title="See the atlas the way your players do">Player view</button>
+      <button type="button" class="dmtoggle" id="dmBtn" aria-pressed="false" hidden title="Show character sheets and DM secrets">DM mode</button>
+      <label class="btn primary" id="uploadTop" for="fileIn" hidden>Upload map</label>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="mapwrap" id="mapwrap" aria-label="Map">
+      <div class="viewport" id="vp">
+        <div class="stage" id="stage"><img id="mapImg" alt=""><div class="pins" id="pins"></div></div>
+      </div>
+      <div class="mapbar">
+        <div class="seg" id="upSeg" hidden><button type="button" id="upBtn" class="upbtn"></button></div>
+        <div class="seg" id="modes" hidden>
+          <button type="button" data-mode="move" aria-pressed="true">Move</button>
+          <button type="button" data-mode="place" aria-pressed="false">+ Place</button>
+          <button type="button" data-mode="npc" aria-pressed="false">+ NPC</button>
+        </div>
+        <div class="seg">
+          <button type="button" id="zIn" aria-label="Zoom in">+</button>
+          <button type="button" id="zOut" aria-label="Zoom out">−</button>
+          <button type="button" id="zFit">Fit</button>
+        </div>
+        <div class="seg"><button type="button" id="labelsBtn" aria-pressed="true">Labels</button></div>
+      </div>
+      <div class="pvbanner" id="pvBanner" hidden><span>Player view: this is what your players see. Hidden maps, places and NPCs are left out.</span><button type="button" id="pvExit">Back to DM view</button></div>
+      <div class="hintbar" id="hint" hidden></div>
+      <div class="mapempty" id="mapEmpty" hidden></div>
+      <div class="dropzone" id="dropzone" hidden>Drop the image to add it as a map</div>
+    </section>
+
+    <aside class="rail">
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" data-tab="details" aria-selected="true">Details</button>
+        <button type="button" role="tab" data-tab="npcs" aria-selected="false">NPCs</button>
+        <button type="button" role="tab" data-tab="web" aria-selected="false">Connections</button>
+      </div>
+      <div class="pane" id="pane"></div>
+    </aside>
+  </main>
+</div>
+<input type="file" id="fileIn" accept="image/*" class="sr" tabindex="-1" aria-hidden="true">
+<input type="file" id="sheetIn" accept="application/pdf,.pdf,image/*" class="sr" tabindex="-1" aria-hidden="true">
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+const PLACE_TYPES = [
+  ['city', 'City'], ['town', 'Town'], ['village', 'Village'], ['dungeon', 'Dungeon'],
+  ['landmark', 'Landmark'], ['wilderness', 'Wilderness'], ['poi', 'Point of interest'],
+];
+const ATTITUDES = [['friendly', 'Friendly'], ['neutral', 'Neutral'], ['hostile', 'Hostile'], ['unknown', 'Unknown']];
+const GLYPH = {
+  city: 'M10 22v-7l2-2v-3h2v3h2v-3h2v3l2 2v7z',
+  town: 'M10 22v-6l7-6 7 6v6z',
+  village: 'M11 22v-5l6-5 6 5v5z',
+  dungeon: 'M11 22v-6a6 6 0 0 1 12 0v6h-4v-4h-4v4z',
+  landmark: 'M12 23V9h10l-2 3 2 3h-8v8z',
+  wilderness: 'M17 8l6 8h-3l4 5H10l4-5h-3z',
+  poi: 'M17 8l2.4 5 5.4.7-4 3.7 1 5.4-4.8-2.6-4.8 2.6 1-5.4-4-3.7 5.4-.7z',
+};
+const PIN_BODY = 'M17 41C17 41 3 26 3 16a14 14 0 0 1 28 0c0 10-14 25-14 25z';
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const initials = (n) => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
+const typeName = (t) => (PLACE_TYPES.find((p) => p[0] === t) || [, 'Place'])[1];
+const attName = (a) => (ATTITUDES.find((p) => p[0] === a) || [, 'Neutral'])[1];
+const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
+
+/* ---------- State ---------- */
+let db = null, assets = null, editable = false, isDM = false, loaded = { maps: false, places: false, npcs: false };
+// ALL = everything this viewer can read; D = what the current view shows (filtered in player view).
+const PUB = { maps: new Map(), places: new Map(), npcs: new Map() };
+const HID = { maps: new Map(), places: new Map(), npcs: new Map() };
+const ALL = { maps: new Map(), places: new Map(), npcs: new Map() };
+const SH = new Map();   // npc id -> { sheet, sheetFile }, readable by the DM only
+const PS = new Map();   // place id -> { secret }, readable by the DM only
+let D = ALL;
+let playerView = store.get('atlas-player') === '1';
+let curMap = store.get('atlas-map');
+let sel = null;            // {kind:'place'|'npc', id}
+let mode = 'move';         // move | place | npc | pin-npc
+let pinningNpc = null;     // npc id waiting for a map position
+let tab = 'details';
+let showLabels = store.get('atlas-labels') !== '0';
+let dmMode = store.get('atlas-dm') === '1';
+const showSheets = () => isDM && !playerView && dmMode;
+let dataError = '';
+
+/* ---------- Toast ---------- */
+let toastT;
+function toast(msg, err) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); t.hidden = false;
+  clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), err ? 6000 : 2600);
+}
+
+/* ---------- Data helpers ---------- */
+// Hidden records live under dm/, which the access rules keep unreadable for players.
+const HPATH = (col) => 'dm/hidden/' + col;
+function pathOf(col, id) { const r = ALL[col].get(id); return r && r._h ? HPATH(col) : col; }
+const clean = (d) => { const o = { ...d }; delete o.id; delete o._h; return o; };
+async function put(col, id, data) {
+  try { await db.collection(pathOf(col, id)).doc(id).set(clean(data)); return true; }
+  catch (e) { writeErr(e); return false; }
+}
+async function patch(col, id, data) {
+  try { await db.collection(pathOf(col, id)).doc(id).update(data); return true; }
+  catch (e) { writeErr(e); return false; }
+}
+async function remove(col, id) {
+  try {
+    await db.collection(col).doc(id).delete();
+    if (isDM) await db.collection(HPATH(col)).doc(id).delete();
+    return true;
+  } catch (e) { writeErr(e); return false; }
+}
+async function setHidden(col, id, h) {
+  const r = ALL[col].get(id); if (!r || !!r._h === h) return;
+  ALL[col].set(id, { ...r, _h: h }); afterData(true);
+  try {
+    await db.collection(h ? HPATH(col) : col).doc(id).set(clean(r));
+    await db.collection(h ? col : HPATH(col)).doc(id).delete();
+    toast(h ? `${r.name} is hidden from players.` : `${r.name} is now visible to players.`);
+  } catch (e) { writeErr(e); }
+}
+async function putSecret(path, map, id, data) {
+  const next = { ...(map.get(id) || {}), ...data }; map.set(id, next);
+  try { await db.collection(path).doc(id).set(next); return true; }
+  catch (e) { writeErr(e); return false; }
+}
+const putSheet = (id, data) => putSecret('dm/sheets/npcs', SH, id, data);
+const putPlaceSecret = (id, data) => putSecret('dm/sheets/places', PS, id, data);
+function rebuild() {
+  if (isDM && !playerView) { D = ALL; return; }
+  const visMap = (m, depth) => {
+    if (!m || m._h || depth > 20) return false;
+    if (!m.placeId) return true;
+    const p = ALL.places.get(m.placeId);
+    return !!p && !p._h && visMap(ALL.maps.get(p.mapId), depth + 1);
+  };
+  const maps = new Map([...ALL.maps].filter(([, m]) => visMap(m, 0)));
+  const places = new Map([...ALL.places].filter(([, p]) => !p._h && maps.has(p.mapId)));
+  const npcs = new Map([...ALL.npcs].filter(([, n]) => !n._h).map(([id, n]) => [id, {
+    ...n, mapId: maps.has(n.mapId) ? n.mapId : null, placeId: places.has(n.placeId) ? n.placeId : null,
+    links: (n.links || []).filter((l) => !ALL.npcs.get(l.to)?._h),
+  }]));
+  D = { maps, places, npcs };
+}
+function writeErr(e) {
+  const c = e && e.code;
+  if (c === 'quota_exceeded') toast('The campaign is full. Delete some maps, places or NPCs to add more.', true);
+  else if (c === 'invalid_argument') { toast('You can view this campaign but not change it.', true); }
+  else toast('Couldn’t save that change. Check your connection and try again.', true);
+}
+const mapsList = () => [...D.maps.values()].sort((a, b) => (a.created || 0) - (b.created || 0));
+const placesOn = (mapId) => [...D.places.values()].filter((p) => p.mapId === mapId);
+const npcsOn = (mapId) => [...D.npcs.values()].filter((n) => n.mapId === mapId);
+const childMaps = (placeId) => mapsList().filter((m) => m.placeId === placeId);
+function mapPath(mapId) {
+  const out = []; const seen = new Set(); let m = D.maps.get(mapId);
+  while (m && !seen.has(m.id)) {
+    seen.add(m.id); out.unshift(m);
+    const p = m.placeId && D.places.get(m.placeId);
+    m = p ? D.maps.get(p.mapId) : null;
+  }
+  return out;
+}
+function placeLabel(id) {
+  const p = D.places.get(id); if (!p) return '';
+  const m = D.maps.get(p.mapId);
+  return m ? `${p.name} (${m.name})` : p.name;
+}
+
+/* ---------- Pan & zoom ---------- */
+const vp = $('#vp'), stage = $('#stage'), img = $('#mapImg');
+const V = { s: 1, tx: 0, ty: 0, w: 1, h: 1, min: .05 };
+function applyView() {
+  stage.style.transform = `translate(${V.tx}px, ${V.ty}px) scale(${V.s})`;
+  stage.style.setProperty('--inv', 1 / V.s);
+}
+function fit() {
+  const r = vp.getBoundingClientRect(); if (!r.width) return;
+  const s = Math.min(r.width / V.w, (r.height - 40) / V.h) * .96;
+  V.min = s * .5; V.s = s;
+  V.tx = (r.width - V.w * s) / 2; V.ty = 40 + (r.height - 40 - V.h * s) / 2;
+  applyView();
+}
+function zoomAt(px, py, k) {
+  const ns = clamp(V.s * k, V.min, 6); const f = ns / V.s;
+  V.tx = px - (px - V.tx) * f; V.ty = py - (py - V.ty) * f; V.s = ns; applyView();
+}
+function centerOn(x, y) {
+  const r = vp.getBoundingClientRect();
+  if (V.s < V.min * 2.4) V.s = V.min * 2.4;
+  V.tx = r.width / 2 - x * V.w * V.s; V.ty = r.height / 2 - y * V.h * V.s; applyView();
+}
+function toMap(cx, cy) {
+  const r = vp.getBoundingClientRect();
+  return { x: (cx - r.left - V.tx) / V.s / V.w, y: (cy - r.top - V.ty) / V.s / V.h };
+}
+vp.addEventListener('wheel', (e) => {
+  if (!curMap) return; e.preventDefault();
+  const r = vp.getBoundingClientRect();
+  zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * (e.ctrlKey ? .01 : .0015)));
+}, { passive: false });
+$('#zIn').addEventListener('click', () => { const r = vp.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1.35); });
+$('#zOut').addEventListener('click', () => { const r = vp.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1 / 1.35); });
+$('#zFit').addEventListener('click', fit);
+let userMoved = false;
+new ResizeObserver(() => { if (curMap && V.w > 1 && !userMoved) fit(); }).observe(vp);
+
+const ptrs = new Map();
+let gesture = null; // {kind:'pan'|'pin'|'pinch', ...}
+vp.addEventListener('pointerdown', (e) => {
+  if (!curMap || e.button > 0) return;
+  vp.setPointerCapture(e.pointerId);
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (ptrs.size === 2) {
+    const [a, b] = [...ptrs.values()];
+    gesture = { kind: 'pinch', d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, moved: true };
+    return;
+  }
+  const pinEl = e.target.closest('.pin');
+  gesture = { kind: pinEl ? 'pin' : 'pan', pinEl, sx: e.clientX, sy: e.clientY, lx: e.clientX, ly: e.clientY, moved: false };
+});
+vp.addEventListener('pointermove', (e) => {
+  if (!ptrs.has(e.pointerId) || !gesture) return;
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (gesture.kind === 'pinch' && ptrs.size >= 2) {
+    const [a, b] = [...ptrs.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    const r = vp.getBoundingClientRect();
+    V.tx += mx - gesture.mx; V.ty += my - gesture.my;
+    zoomAt(mx - r.left, my - r.top, d / gesture.d);
+    gesture.d = d; gesture.mx = mx; gesture.my = my; userMoved = true;
+    return;
+  }
+  if (!gesture.moved && Math.hypot(e.clientX - gesture.sx, e.clientY - gesture.sy) > 5) {
+    gesture.moved = true;
+    if (gesture.kind === 'pin' && !(editable && mode === 'move')) gesture.kind = 'pan';
+    if (gesture.kind === 'pin') gesture.pinEl.classList.add('dragging'); else vp.classList.add('panning');
+  }
+  if (!gesture.moved) return;
+  if (gesture.kind === 'pan') {
+    V.tx += e.clientX - gesture.lx; V.ty += e.clientY - gesture.ly; applyView(); userMoved = true;
+  } else if (gesture.kind === 'pin') {
+    const p = toMap(e.clientX, e.clientY);
+    gesture.pinEl.style.left = clamp(p.x, 0, 1) * 100 + '%'; gesture.pinEl.style.top = clamp(p.y, 0, 1) * 100 + '%';
+  }
+  gesture.lx = e.clientX; gesture.ly = e.clientY;
+});
+function endPointer(e) {
+  if (!ptrs.has(e.pointerId)) return;
+  ptrs.delete(e.pointerId);
+  const g = gesture;
+  if (ptrs.size > 0) { if (g && g.kind === 'pinch') { const [a] = [...ptrs.values()]; gesture = { kind: 'pan', sx: a.x, sy: a.y, lx: a.x, ly: a.y, moved: true }; } return; }
+  gesture = null; vp.classList.remove('panning');
+  if (!g || e.type === 'pointercancel') { render(); return; }
+  if (g.kind === 'pin' && g.moved) {
+    g.pinEl.classList.remove('dragging');
+    const p = toMap(e.clientX, e.clientY);
+    const kind = g.pinEl.dataset.kind, id = g.pinEl.dataset.id;
+    const col = kind === 'place' ? 'places' : 'npcs';
+    const rec = D[col].get(id);
+    if (rec) { const x = clamp(p.x, 0, 1), y = clamp(p.y, 0, 1); D[col].set(id, { ...rec, x, y }); patch(col, id, { x, y }); }
+    return;
+  }
+  if (g.moved) return;
+  if (g.kind === 'pin') { activatePin(g.pinEl.dataset.kind, g.pinEl.dataset.id); return; }
+  const p = toMap(e.clientX, e.clientY);
+  if (p.x < 0 || p.x > 1 || p.y < 0 || p.y > 1) { if (sel) { sel = null; render(); } return; }
+  if (mode === 'place') createPlace(p);
+  else if (mode === 'npc') createNpc({ mapId: curMap, x: p.x, y: p.y });
+  else if (mode === 'pin-npc' && pinningNpc) pinNpc(pinningNpc, p);
+  else if (sel) { sel = null; render(); }
+}
+vp.addEventListener('pointerup', endPointer);
+vp.addEventListener('pointercancel', endPointer);
+vp.addEventListener('keydown', (e) => {
+  const pin = e.target.closest && e.target.closest('.pin');
+  if (pin && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); activatePin(pin.dataset.kind, pin.dataset.id); }
+});
+// A place with its own map opens that map; anything else shows its details.
+function activatePin(kind, id) {
+  const kids = kind === 'place' && mode === 'move' ? childMaps(id) : [];
+  if (kids.length) { openMap(kids[0].id); return; }
+  select(kind, id);
+}
+
+/* ---------- Modes ---------- */
+function setMode(m, npcId) {
+  mode = m; pinningNpc = m === 'pin-npc' ? npcId : null;
+  document.querySelectorAll('#modes button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
+  vp.classList.toggle('adding', m !== 'move');
+  const hint = $('#hint');
+  const msgs = {
+    place: 'Click the map to drop a place. Press Esc to stop.',
+    npc: 'Click the map to drop an NPC. Press Esc to stop.',
+    'pin-npc': `Click the map to put ${esc(D.npcs.get(npcId)?.name || 'this NPC')} here. Esc to cancel.`,
+  };
+  hint.hidden = !msgs[m]; hint.innerHTML = msgs[m] || '';
+}
+$('#modes').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setMode(b.dataset.mode); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && mode !== 'move') setMode('move'); });
+$('#labelsBtn').addEventListener('click', () => {
+  showLabels = !showLabels; store.set('atlas-labels', showLabels ? '1' : '0');
+  $('#labelsBtn').setAttribute('aria-pressed', String(showLabels)); $('#mapwrap').classList.toggle('hidelabels', !showLabels);
+});
+$('#labelsBtn').setAttribute('aria-pressed', String(showLabels)); $('#mapwrap').classList.toggle('hidelabels', !showLabels);
+
+/* ---------- Create / edit ---------- */
+async function createPlace(p) {
+  const id = uid();
+  const rec = { mapId: curMap, x: p.x, y: p.y, name: 'New place', type: 'town', notes: '', created: Date.now() };
+  D.places.set(id, { id, ...rec }); select('place', id, true); setMode('move');
+  await put('places', id, rec);
+  focusName();
+}
+async function createNpc(extra) {
+  const id = uid();
+  const rec = { name: 'New NPC', role: '', faction: '', attitude: 'neutral', notes: '', placeId: null, mapId: null, x: null, y: null, links: [], created: Date.now(), ...extra };
+  D.npcs.set(id, { id, ...rec }); select('npc', id, true); if (mode === 'npc') setMode('move');
+  await put('npcs', id, rec);
+  focusName();
+}
+function focusName() { setTimeout(() => { const n = $('#fName'); if (n) { n.focus(); n.select(); } }, 30); }
+async function pinNpc(id, p) {
+  const n = D.npcs.get(id); setMode('move'); if (!n) return;
+  D.npcs.set(id, { ...n, mapId: curMap, x: p.x, y: p.y }); render();
+  await patch('npcs', id, { mapId: curMap, x: p.x, y: p.y });
+}
+
+function select(kind, id, noCenter) {
+  sel = { kind, id }; tab = 'details';
+  const rec = kind === 'place' ? D.places.get(id) : D.npcs.get(id);
+  if (rec && rec.mapId && rec.mapId !== curMap && D.maps.has(rec.mapId)) { openMap(rec.mapId, true); }
+  render(true);
+  if (!noCenter && rec && rec.mapId === curMap && rec.x != null) centerOn(rec.x, rec.y);
+}
+function openMap(id, keepSel) {
+  if (!D.maps.has(id)) return;
+  if (curMap !== id) { curMap = id; store.set('atlas-map', id); userMoved = false; loadImage(); }
+  if (!keepSel) sel = null;
+  setMode('move');
+  render(true);
+}
+function loadImage() {
+  const m = D.maps.get(curMap); if (!m) return;
+  V.w = m.w || 1600; V.h = m.h || 1000;
+  stage.style.width = V.w + 'px'; stage.style.height = V.h + 'px';
+  img.style.width = V.w + 'px'; img.style.height = V.h + 'px';
+  img.src = '/_blob/' + m.asset; img.alt = m.name;
+  fit();
+}
+
+/* ---------- Uploads ---------- */
+let uploadFor = null; // place id the next map belongs to, or null for a top-level map
+function armUpload(placeId) { uploadFor = placeId || null; $('#fileIn').value = ''; }
+$('#fileIn').addEventListener('change', (e) => {
+  const f = e.target.files && e.target.files[0];
+  if (f) uploadMap(f, uploadFor); else toast('No file was chosen.', true);
+});
+// Pasting a copied image adds it as a map (inside the selected place, if one is selected).
+document.addEventListener('paste', (e) => {
+  if (!editable || e.target.closest('input, textarea')) return;
+  const f = [...(e.clipboardData?.files || [])].find((x) => x.type.startsWith('image/'));
+  if (!f) return;
+  e.preventDefault();
+  uploadMap(f, sel && sel.kind === 'place' ? sel.id : null);
+});
+$('#uploadTop').addEventListener('click', () => armUpload(null));
+const SAFE_TYPE = /^image\/(png|jpeg|webp|gif)$/;
+const MAX_BYTES = 19 * 1024 * 1024, MAX_PIXELS = 16e6;
+function loadImg(file) {
+  return new Promise((res, rej) => {
+    const u = URL.createObjectURL(file); const im = new Image();
+    im.onload = () => res({ im, u });
+    im.onerror = () => { URL.revokeObjectURL(u); rej(new Error('decode')); };
+    im.src = u;
+  });
+}
+// Phone photos (HEIC), odd types and very large images get re-encoded to a JPEG the store accepts.
+async function prepare(file) {
+  const { im, u } = await loadImg(file);
+  try {
+    const w = im.naturalWidth, h = im.naturalHeight;
+    if (!w || !h) throw new Error('decode');
+    if (SAFE_TYPE.test(file.type) && file.size <= MAX_BYTES) return { blob: file, type: file.type, w, h };
+    const k = Math.min(1, Math.sqrt(MAX_PIXELS / (w * h)));
+    const cw = Math.round(w * k), ch = Math.round(h * k);
+    const c = document.createElement('canvas'); c.width = cw; c.height = ch;
+    c.getContext('2d').drawImage(im, 0, 0, cw, ch);
+    let q = .9, blob = null;
+    do { blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', q)); q -= .15; } while (blob && blob.size > MAX_BYTES && q > .3);
+    if (!blob) throw new Error('decode');
+    return { blob, type: 'image/jpeg', w: cw, h: ch, converted: true };
+  } finally { URL.revokeObjectURL(u); }
+}
+async function uploadMap(file, placeId) {
+  if (!assets) {
+    toast('Uploading isn\u2019t available in this view. Open the link in a web browser on claude.ai while signed in to your account, then try again.', true);
+    return;
+  }
+  toast('Preparing ' + file.name + '\u2026');
+  let prep;
+  try { prep = await prepare(file); }
+  catch (e) { toast('This browser can\u2019t read that image. Save it as a PNG or JPEG and try again.', true); return; }
+  const d = { w: prep.w, h: prep.h };
+  toast(prep.converted ? 'Uploading (converted to JPEG)\u2026' : 'Uploading ' + file.name + '\u2026');
+  let up;
+  try { up = await assets.upload(prep.blob, { type: prep.type }); }
+  catch (e) {
+    const c = (e && e.code) || 'unknown';
+    console.error('Map upload failed', e);
+    const msg = c === 'too_large' ? 'That image is still over 20 MB. Export a smaller JPEG and try again.'
+      : c === 'quota_or_state' ? 'Map storage is full. Delete a map you no longer need, then try again.'
+      : c === 'rate_limited' ? 'Too many uploads at once. Wait a moment and try again.'
+      : c === 'unsupported_type' ? 'That image type isn\u2019t supported. Use PNG, JPEG, WebP or GIF.'
+      : c === 'not_granted' ? 'Uploads were not allowed for this page. Allow them from the artifact\u2019s Permissions menu, then try again.'
+      : c === 'capability_disabled' || c === 'capability_removed' ? 'Uploading isn\u2019t available in this app. Open the link in a web browser on claude.ai and try again.'
+      : c === 'upstream_auth' ? 'Your sign-in expired. Reload the page and try again.'
+      : `The upload didn\u2019t go through (${c}). Try again in a moment.`;
+    toast(msg, true); return;
+  }
+  const id = uid();
+  const place = placeId && D.places.get(placeId);
+  const name = place ? `${place.name}` + (childMaps(placeId).length ? ` ${childMaps(placeId).length + 1}` : '') : file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
+  const rec = { name, asset: up.id, w: d.w, h: d.h, placeId: placeId || null, created: Date.now() };
+  D.maps.set(id, { id, ...rec });
+  const ok = await put('maps', id, rec);
+  if (ok) { toast(place ? `Map added to ${place.name}.` : 'Map added.'); openMap(id); }
+}
+function d20() { try { const a = new Uint32Array(1); crypto.getRandomValues(a); return (a[0] % 20) + 1; } catch (e) { return Math.floor(Math.random() * 20) + 1; } }
+let sheetFor = null;
+$('#sheetIn').addEventListener('change', (e) => { const f = e.target.files[0]; if (f && sheetFor) uploadSheet(f, sheetFor); });
+async function uploadSheet(file, npcId) {
+  if (!assets) { toast('Uploading isn’t available in this view. Open the link in a web browser on claude.ai while signed in, then try again.', true); return; }
+  const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+  let blob = file, type = 'application/pdf';
+  toast('Uploading ' + file.name + '…');
+  if (!isPdf) {
+    try { const p = await prepare(file); blob = p.blob; type = p.type; }
+    catch (e) { toast('Attach a PDF or an image (PNG, JPEG, WebP or a phone photo).', true); return; }
+  } else if (file.size > 20 * 1024 * 1024) { toast('That PDF is over 20 MB. Export a smaller copy and try again.', true); return; }
+  let up;
+  try { up = await assets.upload(blob, { type }); }
+  catch (e) {
+    const c = (e && e.code) || 'unknown'; console.error('Sheet upload failed', e);
+    toast(c === 'too_large' ? 'That file is over 20 MB.' : c === 'quota_or_state' ? 'Storage is full. Remove an old map or sheet, then try again.' : `The upload didn’t go through (${c}). Try again in a moment.`, true);
+    return;
+  }
+  const n = D.npcs.get(npcId); if (!n) return;
+  const old = (SH.get(npcId) || {}).sheetFile;
+  const sheetFile = { id: up.id, name: file.name, type };
+  const done = putSheet(npcId, { sheetFile }); renderPane(true);
+  if (await done) {
+    try { if (old && old.id !== up.id) await assets.delete(old.id); } catch (e) {}
+    toast(`Sheet attached to ${n.name}.`);
+  }
+}
+function applyDm() {
+  $('#dmBtn').setAttribute('aria-pressed', String(dmMode));
+  $('#dmBtn').hidden = !isDM || playerView;
+  $('#pvBtn').hidden = !isDM;
+  $('#pvBtn').setAttribute('aria-pressed', String(playerView));
+  $('#roleChip').hidden = isDM || !db;
+  $('#pvBanner').hidden = !(isDM && playerView);
+  document.body.classList.toggle('dm', showSheets());
+}
+function setPlayerView(on) {
+  playerView = on; store.set('atlas-player', on ? '1' : '0');
+  editable = isDM && !playerView;
+  setMode('move'); sel = null;
+  applyDm(); afterData(true);
+}
+$('#pvBtn').addEventListener('click', () => setPlayerView(!playerView));
+$('#pvExit').addEventListener('click', () => setPlayerView(false));
+$('#dmBtn').addEventListener('click', () => {
+  dmMode = !dmMode; store.set('atlas-dm', dmMode ? '1' : '0'); applyDm(); renderPane(true);
+  toast(dmMode ? 'DM mode on. Character sheets and secrets are visible.' : 'DM mode off. Sheets and secrets are hidden.');
+});
+applyDm();
+// Drag and drop onto the map area
+const wrap = $('#mapwrap');
+wrap.addEventListener('dragover', (e) => { if (!editable || ![...e.dataTransfer.types].includes('Files')) return; e.preventDefault(); $('#dropzone').hidden = false; });
+wrap.addEventListener('dragleave', (e) => { if (!wrap.contains(e.relatedTarget)) $('#dropzone').hidden = true; });
+wrap.addEventListener('drop', (e) => {
+  e.preventDefault(); $('#dropzone').hidden = true;
+  const f = e.dataTransfer.files[0]; if (!f) return;
+  const target = sel && sel.kind === 'place' ? sel.id : null;
+  uploadMap(f, target);
+});
+
+/* ---------- Delete ---------- */
+let armed = null, armT;
+function arm(btn, key, label, fn) {
+  if (armed === key) { clearTimeout(armT); armed = null; fn(); return; }
+  document.querySelectorAll('.armed').forEach((b) => { b.classList.remove('armed'); b.textContent = b.dataset.orig; });
+  armed = key; btn.dataset.orig = btn.textContent; btn.textContent = label; btn.classList.add('armed');
+  clearTimeout(armT); armT = setTimeout(() => { armed = null; btn.classList.remove('armed'); btn.textContent = btn.dataset.orig; }, 3500);
+}
+async function deletePlace(id) {
+  const p = D.places.get(id); if (!p) return;
+  for (const m of childMaps(id)) { D.maps.set(m.id, { ...m, placeId: null }); await patch('maps', m.id, { placeId: null }); }
+  for (const n of D.npcs.values()) if (n.placeId === id) { D.npcs.set(n.id, { ...n, placeId: null }); await patch('npcs', n.id, { placeId: null }); }
+  D.places.delete(id); sel = null; render();
+  PS.delete(id); try { await db.collection('dm/sheets/places').doc(id).delete(); } catch (e) {}
+  await remove('places', id); toast(`${p.name} deleted.`);
+}
+async function deleteNpc(id) {
+  const n = D.npcs.get(id); if (!n) return;
+  for (const o of D.npcs.values()) {
+    if (o.id !== id && (o.links || []).some((l) => l.to === id)) {
+      const links = o.links.filter((l) => l.to !== id); D.npcs.set(o.id, { ...o, links }); await patch('npcs', o.id, { links });
+    }
+  }
+  D.npcs.delete(id); sel = null; render();
+  const sf = (SH.get(id) || {}).sheetFile; SH.delete(id);
+  try { await db.collection('dm/sheets/npcs').doc(id).delete(); if (sf && assets) await assets.delete(sf.id); } catch (e) {}
+  await remove('npcs', id); toast(`${n.name} deleted.`);
+}
+async function deleteMap(id) {
+  const m = D.maps.get(id); if (!m) return;
+  for (const p of placesOn(id)) {
+    for (const c of childMaps(p.id)) { D.maps.set(c.id, { ...c, placeId: null }); await patch('maps', c.id, { placeId: null }); }
+    D.places.delete(p.id); await remove('places', p.id);
+  }
+  for (const n of npcsOn(id)) { D.npcs.set(n.id, { ...n, mapId: null, x: null, y: null }); await patch('npcs', n.id, { mapId: null, x: null, y: null }); }
+  D.maps.delete(id); await remove('maps', id);
+  try { if (m.asset && assets) await assets.delete(m.asset); } catch (e) {}
+  const parent = m.placeId && D.places.get(m.placeId);
+  curMap = null; sel = null;
+  const next = (parent && parent.mapId) || (mapsList()[0] || {}).id;
+  if (next) openMap(next); else render(true);
+  toast(`${m.name} deleted. Its NPCs are still in the roster.`);
+}
+async function clearExamples() {
+  const ex = (c) => [...D[c].values()].filter((r) => r.example);
+  const maps = ex('maps');
+  for (const n of ex('npcs')) { D.npcs.delete(n.id); await remove('npcs', n.id); }
+  for (const p of ex('places')) { D.places.delete(p.id); await remove('places', p.id); }
+  for (const m of maps) { D.maps.delete(m.id); await remove('maps', m.id); try { if (m.asset && assets) await assets.delete(m.asset); } catch (e) {} }
+  curMap = (mapsList()[0] || {}).id || null; sel = null;
+  if (curMap) loadImage();
+  render(true); toast('Examples removed. Upload your first map to begin.');
+}
+
+/* ---------- Render: map ---------- */
+function pinsHTML() {
+  if (!curMap) return '';
+  const places = placesOn(curMap).map((p) => {
+    const isSel = sel && sel.kind === 'place' && sel.id === p.id;
+    const kids = childMaps(p.id).length;
+    return `<button type="button" class="pin t-${esc(p.type)}${isSel ? ' sel' : ''}${kids ? ' has-map' : ''}${p._h ? ' hid' : ''}" data-kind="place" data-id="${p.id}" style="left:${p.x * 100}%;top:${p.y * 100}%" aria-label="${kids ? `Open map of ${esc(p.name)}` : `${esc(typeName(p.type))}: ${esc(p.name)}`}" title="${kids ? `Open map of ${esc(p.name)}` : esc(p.name)}">
+      <svg class="mk" viewBox="0 0 34 42" aria-hidden="true"><path class="body" d="${PIN_BODY}"/><path class="glyph" transform="translate(0 -1)" d="${GLYPH[p.type] || GLYPH.poi}"/></svg>
+      ${kids ? '<span class="mapbadge" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M1 3.5 5.5 2l5 1.5L15 2v10.5L10.5 14l-5-1.5L1 14z M5.5 2v10.5 M10.5 3.5V14"/></svg></span>' : ''}
+      <span class="nm">${esc(p.name)}${kids ? ' ›' : ''}</span></button>`;
+  });
+  const npcs = npcsOn(curMap).filter((n) => n.x != null).map((n) => {
+    const isSel = sel && sel.kind === 'npc' && sel.id === n.id;
+    return `<button type="button" class="pin npc att-${esc(n.attitude)}${isSel ? ' sel' : ''}${n._h ? ' hid' : ''}" data-kind="npc" data-id="${n.id}" style="left:${n.x * 100}%;top:${n.y * 100}%" aria-label="NPC: ${esc(n.name)}">
+      <span class="face">${esc(initials(n.name))}</span><span class="nm">${esc(n.name)}</span></button>`;
+  });
+  return places.join('') + npcs.join('');
+}
+function renderMap() {
+  const m = curMap && D.maps.get(curMap);
+  const empty = $('#mapEmpty');
+  $('#modes').hidden = !editable || !m;
+  if (!m) {
+    stage.hidden = true; empty.hidden = false; $('#upSeg').hidden = true;
+    const ready = loaded.maps && loaded.places && loaded.npcs;
+    empty.innerHTML = !db ? `<div class="inner"><h2>Campaign unavailable</h2><p>${esc(dataError || 'Open this page in Claude while signed in to load the campaign.')}</p></div>`
+      : !ready ? '<div class="inner"><p>Loading your campaign…</p></div>'
+      : editable ? `<div class="inner"><h2>Upload your first map</h2><p>Add a world, region or city map as a PNG, JPEG or WebP image. You can also drag an image onto this area. Then drop pins for towns, dungeons and NPCs, and attach more detailed maps to any place.</p><label class="btn primary" for="fileIn" data-act="upload-top">Upload map</label><p>You can also paste a copied image here.</p></div>`
+      : '<div class="inner"><h2>No maps yet</h2><p>The campaign owner hasn’t added a map.</p></div>';
+    return;
+  }
+  stage.hidden = false; empty.hidden = true;
+  $('#pins').innerHTML = pinsHTML();
+  const parentPlace = m.placeId && D.places.get(m.placeId);
+  const parentMap = parentPlace && D.maps.get(parentPlace.mapId);
+  $('#upSeg').hidden = !parentMap;
+  if (parentMap) { $('#upBtn').textContent = '↑ ' + parentMap.name; $('#upBtn').dataset.map = parentMap.id; $('#upBtn').dataset.place = parentPlace.id; }
+}
+$('#upBtn').addEventListener('click', (e) => {
+  const { map, place } = e.currentTarget.dataset;
+  openMap(map);
+  const p = D.places.get(place); if (p) centerOn(p.x, p.y);
+});
+$('#mapEmpty').addEventListener('click', (e) => { if (e.target.closest('[data-act="upload-top"]')) armUpload(null); });
+
+function renderHeader() {
+  const path = curMap ? mapPath(curMap) : [];
+  $('#crumbs').innerHTML = path.map((m, i) => {
+    const via = m.placeId && D.places.get(m.placeId);
+    return (i ? '<span class="sep">›</span>' : '') + (i === path.length - 1
+      ? `<span class="here">${esc(m.name)}</span>`
+      : `<button type="button" data-map="${m.id}">${esc(m.name)}</button>`);
+  }).join('');
+  const depth = (m) => mapPath(m.id).length - 1;
+  const ordered = [];
+  const walk = (parentPlace, d) => {
+    mapsList().filter((m) => (m.placeId || null) === parentPlace || (d === 0 && m.placeId && !D.places.has(m.placeId))).forEach((m) => {
+      if (ordered.includes(m)) return; ordered.push(m);
+      placesOn(m.id).forEach((p) => walk(p.id, d + 1));
+    });
+  };
+  walk(null, 0);
+  mapsList().forEach((m) => { if (!ordered.includes(m)) ordered.push(m); });
+  const ms = $('#mapSel');
+  ms.hidden = !ordered.length;
+  ms.innerHTML = ordered.map((m) => `<option value="${m.id}"${m.id === curMap ? ' selected' : ''}>${'\u2003'.repeat(depth(m))}${esc(m.name)}${m._h ? ' (hidden)' : ''}</option>`).join('');
+  $('#uploadTop').hidden = !editable;
+}
+$('#crumbs').addEventListener('click', (e) => { const b = e.target.closest('[data-map]'); if (b) openMap(b.dataset.map); });
+$('#mapSel').addEventListener('change', (e) => openMap(e.target.value));
+
+/* ---------- Render: rail ---------- */
+const dis = () => (editable ? '' : ' disabled');
+const visRow = (col, r) => (editable ? `<label class="vis${r._h ? ' off' : ''}"><input type="checkbox" data-vis="${col}" data-id="${r.id}"${r._h ? '' : ' checked'}><span><b>Visible to players</b><small>${r._h ? 'Hidden. Players can\u2019t see or find this.' : 'Players can see this' + (col === 'npcs' ? ' NPC and their notes.' : col === 'maps' ? ' map.' : ' place and its notes.')}</small></span></label>` : '');
+const hidChip = (r) => (r._h && editable ? '<span class="chip hid">Hidden</span>' : '');
+const notesLbl = () => (isDM ? ' <span class="aside">(players can read)</span>' : '');
+function npcItem(n, sub) {
+  return `<li><button type="button" class="item" data-sel="npc" data-id="${n.id}"><span class="face att-${esc(n.attitude)}">${esc(initials(n.name))}</span>
+    <span><span class="t">${esc(n.name)}</span><span class="s">${esc(sub ?? ([n.role, n.placeId && D.places.get(n.placeId)?.name].filter(Boolean).join(' · ') || 'No details yet'))}</span></span>${n._h && editable ? '<span class="chip hid">Hidden</span>' : `<span class="chip">${esc(attName(n.attitude))}</span>`}</button></li>`;
+}
+function placeItem(p) {
+  const kids = childMaps(p.id).length;
+  return `<li><button type="button" class="item" data-sel="place" data-id="${p.id}"><span class="dot t-${esc(p.type)}"></span>
+    <span><span class="t">${esc(p.name)}</span><span class="s">${esc(typeName(p.type))}${kids ? ` \u00b7 ${kids} map${kids > 1 ? 's' : ''}` : ''}</span></span>${hidChip(p) || '<span></span>'}</button></li>`;
+}
+function exampleBanner() {
+  const any = [...D.maps.values()].some((m) => m.example);
+  if (!any || !editable) return '';
+  return `<div class="banner"><p><b>This is an example campaign.</b> Explore the island, open Saltmere for its town map, and check the Connections tab. Clear it when you’re ready to add your own maps.</p><div><button type="button" data-act="clear-ex">Remove examples</button></div></div>`;
+}
+function detailsHTML() {
+  const m = curMap && D.maps.get(curMap);
+  if (sel && sel.kind === 'place' && D.places.has(sel.id)) return placeHTML(D.places.get(sel.id));
+  if (sel && sel.kind === 'npc' && D.npcs.has(sel.id)) return npcHTML(D.npcs.get(sel.id));
+  if (!m) return exampleBanner() + `<p class="muted">${editable ? 'Upload a map to start. Every map can hold places and NPC pins, and any place can hold its own maps.' : 'No map is open.'}</p>`;
+  const pl = placesOn(m.id), np = npcsOn(m.id);
+  const parent = m.placeId && D.places.get(m.placeId);
+  return exampleBanner() + `
+    <div class="kicker"><span class="lbl">Map</span>${m.example ? '<span class="chip ex">Example</span>' : ''}</div>
+    <div class="field"><label class="lbl" for="mName">Map name</label><input id="mName" value="${esc(m.name)}" data-f="map:name"${dis()}></div>
+    ${visRow('maps', m)}
+    ${parent ? `<p class="muted">Inside <button type="button" class="link" data-sel="place" data-id="${parent.id}">${esc(parent.name)}</button></p>` : ''}
+    <p class="muted">Pins with a gold map badge open their own map when clicked.${editable ? ' Use <b>+ Place</b> or <b>+ NPC</b> above the map, then click where they belong. Drag pins to move them.' : ''}</p>
+    <div class="section"><div class="section-head"><h3>Places on this map (${pl.length})</h3></div>
+      ${pl.length ? `<ul class="list">${pl.sort((a, b) => a.name.localeCompare(b.name)).map(placeItem).join('')}</ul>` : '<p class="muted">No places yet.</p>'}</div>
+    <div class="section"><div class="section-head"><h3>NPCs on this map (${np.length})</h3></div>
+      ${np.length ? `<ul class="list">${np.sort((a, b) => a.name.localeCompare(b.name)).map((n) => npcItem(n)).join('')}</ul>` : '<p class="muted">No NPCs pinned here.</p>'}</div>
+    ${editable ? `<div class="section"><div class="btnrow"><button type="button" class="danger" data-act="del-map">Delete this map</button></div><p class="muted">Deleting removes the image and its places. NPCs stay in the roster.</p></div>` : ''}`;
+}
+function placeHTML(p) {
+  const kids = childMaps(p.id);
+  const here = [...D.npcs.values()].filter((n) => n.placeId === p.id).sort((a, b) => a.name.localeCompare(b.name));
+  return `
+    <div class="kicker"><button type="button" class="link" data-act="back">← ${esc(D.maps.get(p.mapId)?.name || 'Map')}</button>${p.example ? '<span class="chip ex">Example</span>' : ''}</div>
+    <div class="field"><label class="lbl" for="fName">Place name</label><input id="fName" value="${esc(p.name)}" data-f="place:name"${dis()}></div>
+    <div class="field"><label class="lbl" for="fType">Type</label><select id="fType" data-f="place:type"${dis()}>${PLACE_TYPES.map(([v, l]) => `<option value="${v}"${p.type === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
+    ${visRow('places', p)}
+    <div class="field"><label class="lbl" for="fNotes">Notes${notesLbl()}</label><textarea id="fNotes" data-f="place:notes" placeholder="What the party knows, rumours, who runs it…"${dis()}>${esc(p.notes)}</textarea></div>
+    ${showSheets() ? `<div class="field"><label class="lbl" for="pSecret">DM secrets <span class="chip dm">DM only</span></label><textarea id="pSecret" data-f="psecret:secret" placeholder="Traps, hidden loot, what's really going on\u2026"${dis()}>${esc((PS.get(p.id) || {}).secret || '')}</textarea></div>` : ''}
+    <div class="section"><div class="section-head"><h3>Maps of ${esc(p.name)}</h3>${editable ? '<label class="btn" for="fileIn" data-act="add-child">Add map</label>' : ''}</div>
+      ${kids.length ? `<ul class="list">${kids.map((m) => `<li><button type="button" class="item" data-map="${m.id}"><span class="dot"></span><span><span class="t">${esc(m.name)}</span><span class="s">${placesOn(m.id).length} places · ${npcsOn(m.id).length} NPCs</span></span><span class="chip">Open</span></button></li>`).join('')}</ul>`
+        : `<p class="muted">${editable ? 'Add a city plan, dungeon layout or building interior. It opens when you go into this place.' : 'No detailed maps.'}</p>`}</div>
+    <div class="section"><div class="section-head"><h3>NPCs based here (${here.length})</h3>${editable ? '<button type="button" data-act="npc-here">New NPC here</button>' : ''}</div>
+      ${here.length ? `<ul class="list">${here.map((n) => npcItem(n, n.role || '')).join('')}</ul>` : '<p class="muted">Set an NPC’s home to this place to list them here.</p>'}</div>
+    ${editable ? `<div class="section"><div class="btnrow"><button type="button" class="danger" data-act="del-place">Delete place</button></div></div>` : ''}`;
+}
+function linksOf(n) {
+  const out = (n.links || []).filter((l) => D.npcs.has(l.to)).map((l) => ({ other: D.npcs.get(l.to), label: l.label, owner: n.id, to: l.to }));
+  for (const o of D.npcs.values()) {
+    if (o.id === n.id) continue;
+    for (const l of o.links || []) if (l.to === n.id) out.push({ other: o, label: l.label, owner: o.id, to: n.id, rev: true });
+  }
+  return out;
+}
+const ABIL = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+const abMod = (v) => Math.floor(((parseInt(v, 10) || 10) - 10) / 2);
+const fmtMod = (m) => (m >= 0 ? '+' : '') + m;
+function sheetHTML(n) {
+  const x = SH.get(n.id) || {}; const s = x.sheet || {}, f = x.sheetFile;
+  const inp = (k, label, ph) => `<div class="field"><label class="lbl" for="s-${k}">${label}</label><input id="s-${k}" value="${esc(s[k] ?? '')}" placeholder="${esc(ph)}" data-f="sheet:${k}"${dis()}></div>`;
+  const ta = (k, label, ph) => `<div class="field"><label class="lbl" for="s-${k}">${label}</label><textarea id="s-${k}" data-f="sheet:${k}" placeholder="${esc(ph)}"${dis()}>${esc(s[k] ?? '')}</textarea></div>`;
+  const file = f
+    ? `<div class="attach">${/^image\//.test(f.type) ? `<a href="/_blob/${esc(f.id)}" target="_blank" rel="noopener"><img src="/_blob/${esc(f.id)}" alt="Character sheet for ${esc(n.name)}"></a>` : ''}
+        <div class="btnrow"><a class="btnlink" href="/_blob/${esc(f.id)}" target="_blank" rel="noopener">Open ${esc(f.name)}</a>${editable ? '<label class="btn" for="sheetIn" data-act="sheet-attach">Replace</label><button type="button" class="danger" data-act="sheet-remove">Remove</button>' : ''}</div></div>`
+    : editable ? '<div class="btnrow"><label class="btn" for="sheetIn" data-act="sheet-attach">Attach PDF or image</label></div><p class="muted">A PDF export, a D&amp;D Beyond sheet, or a photo of a paper sheet.</p>' : '<p class="muted">No sheet attached.</p>';
+  return `<div class="section"><div class="section-head"><h3>Character sheet</h3><span class="chip dm">DM only</span></div>
+    <div class="sheet-top">${inp('ac', 'AC', '12')}${inp('hp', 'HP', '27')}${inp('speed', 'Speed', '30 ft.')}${inp('cr', 'CR', '1')}</div>
+    <div class="abil">${ABIL.map((a) => `<div class="ab"><label class="lbl" for="s-${a}">${a.toUpperCase()}</label><input id="s-${a}" type="number" min="1" max="30" value="${esc(s[a] ?? '')}" placeholder="10" data-f="sheet:${a}"${dis()}><button type="button" class="modbtn" data-act="roll-abil" data-ab="${a}" title="Roll a ${a.toUpperCase()} check">${fmtMod(abMod(s[a]))}</button></div>`).join('')}</div>
+    <div class="row2">${inp('saves', 'Saving throws', 'Dex +4, Wis +2')}${inp('skills', 'Skills', 'Stealth +6')}</div>
+    <div class="row2">${inp('senses', 'Senses', 'Darkvision 60 ft.')}${inp('languages', 'Languages', 'Common')}</div>
+    ${ta('traits', 'Traits', 'Sneak Attack (1/turn). Extra 2d6 damage when it has advantage.')}
+    ${ta('actions', 'Actions', 'Shortsword. +4 to hit, reach 5 ft. Hit: 5 (1d6 + 2) piercing.')}
+    <div class="field"><span class="lbl">Attached sheet</span>${file}</div></div>`;
+}
+function untoldHTML(n) {
+  const items = (SH.get(n.id) || {}).untold || [];
+  return `<div class="section"><div class="section-head"><h3>Not told yet (${items.length})</h3><span class="chip dm">DM only</span></div>
+    ${items.length ? `<ul class="untold">${items.map((it) => `<li><span>${esc(it.text)}</span><button type="button" data-act="reveal" data-uid="${esc(it.id)}" title="Move this into what the party knows">Mark as told</button><button type="button" class="x" data-act="untold-del" data-uid="${esc(it.id)}" aria-label="Delete">×</button></li>`).join('')}</ul>`
+      : '<p class="muted">Secrets, rumours and answers this NPC is holding back. When they say one at the table, mark it as told and it moves into the party’s notes.</p>'}
+    <form class="addline" id="untoldForm"><input id="uText" placeholder="Knows who rowed out to the lighthouse" aria-label="Something not told yet"><button type="submit">Add</button></form>
+  </div>`;
+}
+function npcHTML(n) {
+  const links = linksOf(n);
+  const others = [...D.npcs.values()].filter((o) => o.id !== n.id).sort((a, b) => a.name.localeCompare(b.name));
+  const places = [...D.places.values()].sort((a, b) => placeLabel(a.id).localeCompare(placeLabel(b.id)));
+  const onMap = n.mapId && D.maps.get(n.mapId);
+  return `
+    <div class="kicker"><span class="face att-${esc(n.attitude)}" style="width:30px;height:30px;font-size:11px;border-width:2px">${esc(initials(n.name))}</span><span class="lbl">NPC</span>${n.example ? '<span class="chip ex">Example</span>' : ''}</div>
+    <div class="field"><label class="lbl" for="fName">Name</label><input id="fName" value="${esc(n.name)}" data-f="npc:name"${dis()}></div>
+    <div class="row2">
+      <div class="field"><label class="lbl" for="fRole">Role</label><input id="fRole" value="${esc(n.role)}" placeholder="Innkeeper" data-f="npc:role"${dis()}></div>
+      <div class="field"><label class="lbl" for="fAtt">Attitude to party</label><select id="fAtt" data-f="npc:attitude"${dis()}>${ATTITUDES.map(([v, l]) => `<option value="${v}"${n.attitude === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label class="lbl" for="fFac">Faction</label><input id="fFac" value="${esc(n.faction)}" placeholder="Harpers" data-f="npc:faction"${dis()}></div>
+      <div class="field"><label class="lbl" for="fHome">Home</label><select id="fHome" data-f="npc:placeId"${dis()}><option value="">None</option>${places.map((p) => `<option value="${p.id}"${n.placeId === p.id ? ' selected' : ''}>${esc(placeLabel(p.id))}</option>`).join('')}</select></div>
+    </div>
+    ${visRow('npcs', n)}
+    <div class="field"><label class="lbl" for="fNotes">${isDM ? 'Told to the party' + notesLbl() : 'What the party knows'}</label><textarea id="fNotes" data-f="npc:notes" placeholder="What they\u2019ve said, how they act, what the party has learned\u2026"${dis()}>${esc(n.notes)}</textarea></div>
+    ${showSheets() ? untoldHTML(n) + sheetHTML(n) : editable ? '<p class="muted">Turn on <b>DM mode</b> at the top to add a character sheet and secrets.</p>' : ''}
+    <div class="section"><h3>On the map</h3>
+      ${onMap ? `<p class="muted">Pinned on <button type="button" class="link" data-act="goto-npc">${esc(onMap.name)}</button></p>` : '<p class="muted">Not pinned on any map.</p>'}
+      ${editable && curMap ? `<div class="btnrow"><button type="button" data-act="pin-npc">${onMap ? 'Move pin to this map' : 'Pin on this map'}</button>${onMap ? '<button type="button" data-act="unpin-npc">Remove pin</button>' : ''}</div>` : ''}
+    </div>
+    <div class="section"><h3>Connections (${links.length})</h3>
+      ${links.length ? `<div class="links">${links.map((l) => `<div class="link-row"><div class="who"><button type="button" class="link" data-sel="npc" data-id="${l.other.id}">${esc(l.other.name)}</button> <span class="lab">${esc(l.label || 'knows')}</span></div>${editable ? `<button type="button" class="x" data-act="unlink" data-owner="${l.owner}" data-to="${l.to}" aria-label="Remove connection with ${esc(l.other.name)}">×</button>` : ''}</div>`).join('')}</div>` : '<p class="muted">No connections yet.</p>'}
+      ${editable && others.length ? `<form class="addlink" id="linkForm"><select id="lTo" aria-label="Connect to">${others.map((o) => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select><input id="lLabel" placeholder="owes money to" aria-label="Relationship"><button type="submit">Add</button></form>` : ''}
+    </div>
+    ${editable ? `<div class="section"><div class="btnrow"><button type="button" class="danger" data-act="del-npc">Delete NPC</button></div></div>` : ''}`;
+}
+let npcQuery = '';
+function rosterHTML() {
+  const q = npcQuery.trim().toLowerCase();
+  const all = [...D.npcs.values()].sort((a, b) => a.name.localeCompare(b.name));
+  const list = q ? all.filter((n) => [n.name, n.role, n.faction, n.notes, D.places.get(n.placeId)?.name].join(' ').toLowerCase().includes(q)) : all;
+  return `<div class="search"><input id="npcSearch" type="search" placeholder="Search names, roles, factions, notes" value="${esc(npcQuery)}" aria-label="Search NPCs">${editable ? '<button type="button" class="primary" data-act="new-npc">New</button>' : ''}</div>
+    ${list.length ? `<ul class="list" id="roster">${list.map((n) => npcItem(n)).join('')}</ul>` : `<p class="muted">${all.length ? 'No NPCs match that search.' : 'No NPCs yet. Add one here, or use + NPC to drop one straight onto a map.'}</p>`}`;
+}
+function webHTML() {
+  const ns = [...D.npcs.values()].sort((a, b) => a.name.localeCompare(b.name));
+  if (ns.length < 2) return '<p class="muted">Add at least two NPCs and connect them from an NPC’s details to see the web of relationships.</p>';
+  const S = 340, cx = S / 2, cy = S / 2, R = S / 2 - 46;
+  const pos = new Map(ns.map((n, i) => { const a = -Math.PI / 2 + (i / ns.length) * Math.PI * 2; return [n.id, { x: cx + R * Math.cos(a), y: cy + R * Math.sin(a), a }]; }));
+  const focus = sel && sel.kind === 'npc' ? sel.id : null;
+  const edges = [];
+  ns.forEach((n) => (n.links || []).forEach((l) => { if (pos.has(l.to)) edges.push({ a: n.id, b: l.to, label: l.label }); }));
+  const eh = edges.map((e) => {
+    const p = pos.get(e.a), q = pos.get(e.b), hot = focus && (e.a === focus || e.b === focus);
+    const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2;
+    return `<line class="edge${hot ? ' hot' : ''}" x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}"/>` +
+      (e.label && (!focus || hot) ? `<text class="elab${hot ? ' hot' : ''}" x="${mx}" y="${my}" text-anchor="middle" dominant-baseline="middle">${esc(e.label.length > 22 ? e.label.slice(0, 21) + '…' : e.label)}</text>` : '');
+  }).join('');
+  const nh = ns.map((n) => {
+    const p = pos.get(n.id); const out = Math.cos(p.a), below = Math.sin(p.a);
+    const anchor = Math.abs(out) < .3 ? 'middle' : out > 0 ? 'start' : 'end';
+    const lx = p.x + out * 22, ly = p.y + below * 22 + (Math.abs(out) < .3 ? (below > 0 ? 8 : -2) : 4);
+    return `<g class="node att-${esc(n.attitude)}${focus === n.id ? ' sel' : ''}" data-sel="npc" data-id="${n.id}" tabindex="0" role="button" aria-label="${esc(n.name)}">
+      <circle cx="${p.x}" cy="${p.y}" r="15"/><text class="ini" x="${p.x}" y="${p.y}" text-anchor="middle" dominant-baseline="central">${esc(initials(n.name))}</text>
+      <text class="gname" x="${lx}" y="${ly}" text-anchor="${anchor}">${esc(n.name.length > 18 ? n.name.slice(0, 17) + '…' : n.name)}</text></g>`;
+  }).join('');
+  return `<svg class="graph" viewBox="0 0 ${S} ${S}" role="img" aria-label="NPC relationship web">${eh}${nh}</svg>
+    <div class="legend"><span><i class="f"></i>Friendly</span><span><i></i>Neutral</span><span><i class="h"></i>Hostile</span><span><i class="u"></i>Unknown</span></div>
+    <p class="muted">${edges.length} connection${edges.length === 1 ? '' : 's'} between ${ns.length} NPCs. Select someone to highlight their ties.</p>`;
+}
+let paneDirty = false;
+function renderPane(force) {
+  const pane = $('#pane');
+  if (!force && pane.contains(document.activeElement) && document.activeElement.matches('input, textarea, select')) { paneDirty = true; return; }
+  paneDirty = false;
+  document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+  const st = pane.scrollTop;
+  pane.innerHTML = tab === 'npcs' ? rosterHTML() : tab === 'web' ? webHTML() : detailsHTML();
+  pane.scrollTop = st;
+}
+$('#pane').addEventListener('focusout', (e) => { if (paneDirty && !$('#pane').contains(e.relatedTarget)) setTimeout(() => renderPane(), 0); });
+function render(force) { renderHeader(); renderMap(); renderPane(force); }
+
+document.querySelector('.tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) { tab = b.dataset.tab; renderPane(true); } });
+
+/* ---------- Rail events ---------- */
+$('#pane').addEventListener('change', async (e) => {
+  if (e.target.dataset.vis && editable) { setHidden(e.target.dataset.vis, e.target.dataset.id, !e.target.checked); return; }
+  const f = e.target.dataset.f; if (!f || !editable) return;
+  const [kind, field] = f.split(':');
+  if (kind === 'sheet') {
+    const n = D.npcs.get(sel && sel.id); if (!n) return;
+    let v = e.target.value.trim();
+    if (ABIL.includes(field)) { v = v === '' ? null : clamp(parseInt(v, 10) || 10, 1, 30); e.target.value = v ?? ''; }
+    const sheet = (SH.get(n.id) || {}).sheet || {};
+    if (sheet[field] === v) return;
+    if (ABIL.includes(field)) { const b = document.querySelector(`[data-ab="${field}"]`); if (b) b.textContent = fmtMod(abMod(v)); }
+    await putSheet(n.id, { sheet: { ...sheet, [field]: v } });
+    return;
+  }
+  if (kind === 'psecret') {
+    const p = D.places.get(sel && sel.id); if (!p) return;
+    if ((PS.get(p.id) || {}).secret === e.target.value) return;
+    await putPlaceSecret(p.id, { secret: e.target.value });
+    return;
+  }
+  const col = kind === 'map' ? 'maps' : kind === 'place' ? 'places' : 'npcs';
+  const id = kind === 'map' ? curMap : sel && sel.id;
+  const rec = D[col].get(id); if (!rec) return;
+  let v = e.target.value;
+  if (field === 'name') { v = v.trim() || rec.name; e.target.value = v; }
+  if (field === 'placeId') v = v || null;
+  if (rec[field] === v) return;
+  D[col].set(id, { ...rec, [field]: v });
+  renderHeader(); renderMap();
+  if (e.target.tagName === 'SELECT') renderPane(true);
+  await patch(col, id, { [field]: v });
+});
+$('#pane').addEventListener('input', (e) => { if (e.target.id === 'npcSearch') { npcQuery = e.target.value; const pos = e.target.selectionStart; renderPane(true); const s = $('#npcSearch'); s.focus(); s.setSelectionRange(pos, pos); } });
+$('#pane').addEventListener('submit', async (e) => {
+  if (e.target.id === 'untoldForm') {
+    e.preventDefault();
+    const n = D.npcs.get(sel && sel.id); const text = $('#uText').value.trim();
+    if (!n || !text || !editable) return;
+    const untold = [...((SH.get(n.id) || {}).untold || []), { id: uid(), text }];
+    const done = putSheet(n.id, { untold }); renderPane(true);
+    const inp = $('#uText'); if (inp) inp.focus();
+    await done; return;
+  }
+  if (e.target.id !== 'linkForm') return; e.preventDefault();
+  const n = D.npcs.get(sel && sel.id); const to = $('#lTo').value; const label = $('#lLabel').value.trim() || 'knows';
+  if (!n || !to) return;
+  const links = (n.links || []).filter((l) => l.to !== to).concat([{ to, label }]);
+  D.npcs.set(n.id, { ...n, links }); renderPane(true);
+  await patch('npcs', n.id, { links });
+});
+$('#pane').addEventListener('click', (e) => {
+  const s = e.target.closest('[data-sel]');
+  if (s) { select(s.dataset.sel, s.dataset.id); return; }
+  const mp = e.target.closest('[data-map]');
+  if (mp) { openMap(mp.dataset.map); return; }
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const act = b.dataset.act;
+  const cur = sel && (sel.kind === 'place' ? D.places.get(sel.id) : D.npcs.get(sel.id));
+  if (act === 'back') { sel = null; render(true); }
+  else if (act === 'add-child' && cur) armUpload(cur.id);
+  else if (act === 'npc-here' && cur) createNpc({ placeId: cur.id });
+  else if (act === 'new-npc') createNpc({});
+  else if (act === 'pin-npc' && cur) setMode('pin-npc', cur.id);
+  else if (act === 'unpin-npc' && cur) { D.npcs.set(cur.id, { ...cur, mapId: null, x: null, y: null }); render(true); patch('npcs', cur.id, { mapId: null, x: null, y: null }); }
+  else if (act === 'goto-npc' && cur) { if (cur.mapId !== curMap) openMap(cur.mapId, true); centerOn(cur.x, cur.y); }
+  else if (act === 'unlink') {
+    const o = D.npcs.get(b.dataset.owner); if (!o) return;
+    const links = (o.links || []).filter((l) => l.to !== b.dataset.to);
+    D.npcs.set(o.id, { ...o, links }); renderPane(true); patch('npcs', o.id, { links });
+  }
+  else if (act === 'del-place' && cur) arm(b, 'dp' + cur.id, 'Click again to delete', () => deletePlace(cur.id));
+  else if ((act === 'reveal' || act === 'untold-del') && cur) {
+    const list = (SH.get(cur.id) || {}).untold || [];
+    const it = list.find((x) => x.id === b.dataset.uid); if (!it) return;
+    const untold = list.filter((x) => x !== it);
+    if (act === 'reveal') {
+      const notes = (cur.notes || '').trimEnd();
+      const next = (notes ? notes + '\n' : '') + '- ' + it.text;
+      D.npcs.set(cur.id, { ...cur, notes: next });
+      putSheet(cur.id, { untold }); renderPane(true);
+      patch('npcs', cur.id, { notes: next }).then((ok) => ok && toast(`Added to what the party knows about ${cur.name}.`));
+    } else { putSheet(cur.id, { untold }); renderPane(true); toast('Note deleted.'); }
+  }
+  else if (act === 'roll-abil' && cur) {
+    const r = d20(), m = abMod(((SH.get(cur.id) || {}).sheet || {})[b.dataset.ab]);
+    toast(`${cur.name} · ${b.dataset.ab.toUpperCase()} check: ${r + m} (${r} ${m < 0 ? '−' : '+'} ${Math.abs(m)})${r === 20 ? ' · natural 20' : r === 1 ? ' · natural 1' : ''}`);
+  }
+  else if (act === 'sheet-attach' && cur) { sheetFor = cur.id; $('#sheetIn').value = ''; }
+  else if (act === 'sheet-remove' && cur) arm(b, 'sr' + cur.id, 'Click again to remove', async () => {
+    const old = (SH.get(cur.id) || {}).sheetFile;
+    const done = putSheet(cur.id, { sheetFile: null }); renderPane(true);
+    if (await done) { try { if (old && assets) await assets.delete(old.id); } catch (e) {} toast('Sheet removed.'); }
+  });
+  else if (act === 'del-npc' && cur) arm(b, 'dn' + cur.id, 'Click again to delete', () => deleteNpc(cur.id));
+  else if (act === 'del-map') arm(b, 'dm' + curMap, 'Click again to delete map', () => deleteMap(curMap));
+  else if (act === 'clear-ex') arm(b, 'cx', 'Click again to remove examples', clearExamples);
+});
+$('#pane').addEventListener('keydown', (e) => {
+  const g = e.target.closest && e.target.closest('g[data-sel]');
+  if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); select('npc', g.dataset.id); }
+});
+
+/* ---------- Boot ---------- */
+function afterData(force) {
+  rebuild();
+  if (curMap && !D.maps.has(curMap)) curMap = null;
+  if (!curMap && D.maps.size) { const top = mapsList().find((m) => !m.placeId) || mapsList()[0]; curMap = top.id; }
+  const m = curMap && D.maps.get(curMap);
+  if (m && img.getAttribute('src') !== '/_blob/' + m.asset) loadImage();
+  if (sel && !(sel.kind === 'place' ? D.places : D.npcs).has(sel.id)) sel = null;
+  render(force);
+}
+function onSnapErr(err) {
+  dataError = err && err.code === 'revoked' ? 'Access to this campaign changed. Reload the page.' : 'The campaign stopped updating. Reload the page to reconnect.';
+  toast(dataError, true);
+}
+function subscribe(col, hidden) {
+  db.collection(hidden ? HPATH(col) : col).onSnapshot((snap) => {
+    (hidden ? HID : PUB)[col] = new Map(snap.docs.map((d) => [d.id, hidden ? { id: d.id, ...d.data(), _h: true } : { id: d.id, ...d.data() }]));
+    ALL[col] = new Map([...PUB[col], ...HID[col]]);
+    if (!hidden) loaded[col] = true;
+    afterData();
+  }, onSnapErr);
+}
+function subscribeSecrets(path, target) {
+  db.collection(path).onSnapshot((snap) => {
+    target.clear(); snap.docs.forEach((d) => target.set(d.id, d.data()));
+    renderPane();
+  }, onSnapErr);
+}
+render();
+(async () => {
+  const c = window.claude;
+  if (!c || !c.use) { dataError = 'Open this page in Claude while signed in to load the campaign.'; render(); return; }
+  const [d, a, u] = await Promise.all([c.use('db').catch(() => null), c.use('assets').catch(() => null), c.use('user').catch(() => null)]);
+  db = d; assets = a;
+  if (!db) { dataError = 'Sign in to Claude to see this campaign.'; render(); return; }
+  // The DM is anyone who can edit the artifact (the owner, or people given Editor access).
+  try { isDM = u ? await u.canEdit() : !!assets; } catch (e) { isDM = !!assets; }
+  editable = isDM && !playerView;
+  if (isDM && !assets) console.warn('Atlas: assets capability unavailable in this view; map uploads disabled.');
+  ['maps', 'places', 'npcs'].forEach((col) => subscribe(col, false));
+  if (isDM) {
+    ['maps', 'places', 'npcs'].forEach((col) => subscribe(col, true));
+    subscribeSecrets('dm/sheets/npcs', SH);
+    subscribeSecrets('dm/sheets/places', PS);
+  }
+  applyDm(); afterData(true);
+})();
+</script>
