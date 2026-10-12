@@ -232,6 +232,47 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
 .pin.tok .disc.img { background: var(--ti) center / cover no-repeat, var(--tc); color: transparent; border-color: var(--tc); border-width: .16em; }
 .tokpic { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .tokpic .pv { width: 64px; height: 64px; border-radius: 50%; border: 3px solid var(--tc); background: var(--ti) center / cover no-repeat, var(--tc); display: grid; place-items: center; color: var(--tok-ink); font-weight: 700; font-size: 1.3rem; flex: none; }
+/* Character sheets */
+.party { display: grid; gap: 8px; }
+.pc-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); text-align: left; font-weight: 400; width: 100%; }
+.pc-card:hover { border-color: var(--accent); background: var(--surface); }
+.pc-card .t { font-weight: 700; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-card .s { color: var(--muted); font-size: .82rem; display: block; }
+.pc-card .stats { font-family: var(--mono); font-size: .8rem; text-align: right; }
+.pc-card .hpbar { grid-column: 1 / -1; height: 5px; border-radius: 3px; background: var(--hover); overflow: hidden; }
+.pc-card .hpbar i { display: block; height: 100%; background: var(--good); }
+.pc-card .hpbar i.low { background: var(--bad); }
+.cs-modal { position: fixed; inset: 0; z-index: 26; display: grid; place-items: center; padding: 12px; background: rgba(10, 14, 20, .5); }
+.cs-sheet { width: min(980px, 100%); max-height: 92vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.cs-head { position: sticky; top: 0; z-index: 1; background: var(--surface); display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.cs-head h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-body { padding: 14px 16px 20px; display: grid; gap: 16px; }
+.cs-id { display: grid; grid-template-columns: 2fr 1.4fr .6fr 1.2fr 1.2fr; gap: 8px; }
+.cs-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 8px; }
+.cs-box { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; display: grid; gap: 2px; justify-items: center; text-align: center; background: var(--hover); min-width: 0; }
+.cs-box input { text-align: center; font-family: var(--mono); padding: .25rem .2rem; }
+.cs-box .big { font-family: var(--mono); font-size: 1.25rem; font-weight: 700; }
+.cs-hp { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; width: 100%; }
+.cs-hp small { color: var(--muted); font-size: .68rem; }
+.cs-main { display: grid; grid-template-columns: 220px minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; align-items: start; }
+.cs-abil { display: grid; gap: 6px; }
+.cs-ab { display: grid; grid-template-columns: 44px 64px minmax(0, 1fr); gap: 6px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 6px; }
+.cs-ab .nm { font-weight: 700; font-size: .78rem; letter-spacing: .08em; }
+.cs-ab input { text-align: center; font-family: var(--mono); padding: .3rem .2rem; }
+.cs-ab .mods { display: grid; gap: 3px; }
+.roll { font-family: var(--mono); font-size: .85rem; padding: .2rem .4rem; }
+.cs-skills { display: grid; gap: 2px; }
+.cs-row { display: grid; grid-template-columns: 26px 46px minmax(0, 1fr); gap: 6px; align-items: center; font-size: .9rem; }
+.cs-row .cs-abl { color: var(--muted); font-size: .72rem; margin-left: 6px; }
+.pf { width: 22px; height: 22px; padding: 0; border-radius: 50%; font-size: .7rem; line-height: 1; }
+.pf.p1 { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.pf.p2 { background: var(--brass); border-color: var(--brass); color: var(--surface); }
+.cs-text { display: grid; gap: 10px; }
+.cs-text textarea { min-height: 84px; }
+.cs-misc { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: .9rem; }
+.cs-misc label, .cs-misc .dsg { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.cs-misc input[type=checkbox] { width: 18px; height: 18px; margin: 0; flex: none; accent-color: var(--accent); }
+@media (max-width: 860px) { .cs-main { grid-template-columns: minmax(0, 1fr); } .cs-id { grid-template-columns: 1fr 1fr; } }
 .swatches { display: flex; gap: 6px; flex-wrap: wrap; }
 .sw { width: 28px; height: 28px; border-radius: 50%; padding: 0; background: var(--sw); border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--line); }
 .sw:hover { background: var(--sw); filter: brightness(1.1); }
@@ -289,6 +330,7 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
         <button type="button" role="tab" data-tab="details" aria-selected="true">Details</button>
         <button type="button" role="tab" data-tab="npcs" aria-selected="false">NPCs</button>
         <button type="button" role="tab" data-tab="web" aria-selected="false">Connections</button>
+        <button type="button" role="tab" data-tab="party" aria-selected="false">Party</button>
       </div>
       <div class="pane" id="pane"></div>
     </aside>
@@ -297,6 +339,7 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
 <input type="file" id="fileIn" accept="image/*" class="sr" tabindex="-1" aria-hidden="true">
 <input type="file" id="tokImgIn" accept="image/*" class="sr" tabindex="-1" aria-hidden="true">
 <input type="file" id="sheetIn" accept="application/pdf,.pdf,image/*" class="sr" tabindex="-1" aria-hidden="true">
+<div class="cs-modal" id="csModal" hidden><div class="cs-sheet" role="dialog" aria-modal="true" aria-labelledby="csTitle" id="csSheet"></div></div>
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script>
@@ -569,7 +612,7 @@ function endPointer(e) {
   if (mode === 'place') createPlace(p);
   else if (mode === 'npc') createNpc({ mapId: curMap, x: p.x, y: p.y });
   else if (mode === 'token') createToken(p, {});
-  else if (mode === 'mytoken') createToken(p, { owner: myId, name: myName || 'My token', kind: 'pc', color: '#2b6cb0' });
+  else if (mode === 'mytoken') createToken(p, { owner: myId, name: ((CH.get(myId) || {}).name || '').slice(0, 40) || myName || 'My token', kind: 'pc', color: '#2b6cb0' });
   else if (mode === 'pin-npc' && pinningNpc) pinNpc(pinningNpc, p);
   else if (mode === 'tok-npc' && pinningNpc) { const n = D.npcs.get(pinningNpc); createToken(p, { npcId: pinningNpc, name: '', color: ATT_COLOR[n && n.attitude] || '#4a5568' }); }
   else if (sel) { sel = null; render(); }
@@ -809,6 +852,175 @@ async function uploadTokenImage(file, tokId) {
 function deleteTokenImage(url) {
   try { (tokenImgs ? tokenImgs.delete(url) : assets && assets.delete(url)).catch(() => {}); } catch (e) {}
 }
+/* ---------- Character sheets ---------- */
+const CH = new Map();   // user id -> character sheet
+let chLoaded = false;   // don't create a sheet before we know whether one already exists
+const ABILS = [['str', 'Strength'], ['dex', 'Dexterity'], ['con', 'Constitution'], ['int', 'Intelligence'], ['wis', 'Wisdom'], ['cha', 'Charisma']];
+const SKILLS = [
+  ['acrobatics', 'Acrobatics', 'dex'], ['animal', 'Animal Handling', 'wis'], ['arcana', 'Arcana', 'int'], ['athletics', 'Athletics', 'str'],
+  ['deception', 'Deception', 'cha'], ['history', 'History', 'int'], ['insight', 'Insight', 'wis'], ['intimidation', 'Intimidation', 'cha'],
+  ['investigation', 'Investigation', 'int'], ['medicine', 'Medicine', 'wis'], ['nature', 'Nature', 'int'], ['perception', 'Perception', 'wis'],
+  ['performance', 'Performance', 'cha'], ['persuasion', 'Persuasion', 'cha'], ['religion', 'Religion', 'int'], ['sleight', 'Sleight of Hand', 'dex'],
+  ['stealth', 'Stealth', 'dex'], ['survival', 'Survival', 'wis'],
+];
+const csMod = (c, a) => abMod(c[a]);
+const csPB = (c) => Math.ceil(clamp(parseInt(c.level, 10) || 1, 1, 20) / 4) + 1;
+const csSave = (c, a) => csMod(c, a) + ((c.saves || {})[a] ? csPB(c) : 0);
+const csSkill = (c, k, a) => csMod(c, a) + (Number((c.prof || {})[k]) || 0) * csPB(c);
+const memberName = (uid) => (MEMBERS.find((m) => m.id === uid) || {}).username || (uid === myId ? myName : 'A player');
+const canEditSheet = (uid) => !!myId && (uid === myId || isDM);
+
+function pcCard(uid) {
+  const c = CH.get(uid);
+  if (!c) return `<div class="pc-card"><span><span class="t">${esc(memberName(uid))}</span><span class="s">No character sheet yet</span></span>${canEditSheet(uid) ? `<button type="button" data-act="cs-open" data-uid="${esc(uid)}">Create</button>` : '<span></span>'}</div>`;
+  const max = parseInt(c.hpMax, 10) || 0, hp = parseInt(c.hp, 10);
+  const pct = max ? clamp((isNaN(hp) ? max : hp) / max, 0, 1) : 0;
+  const sub = [c.species, [c.cls, c.level && 'level ' + c.level].filter(Boolean).join(' ')].filter(Boolean).join(' · ');
+  return `<button type="button" class="pc-card" data-act="cs-open" data-uid="${esc(uid)}">
+    <span><span class="t">${esc(c.name || memberName(uid))}</span><span class="s">${esc(sub || 'Played by ' + memberName(uid))}</span></span>
+    <span class="stats">${c.ac ? 'AC ' + esc(c.ac) : ''}${max ? `<br>HP ${esc(isNaN(hp) ? max : hp)}/${max}` : ''}</span>
+    ${max ? `<span class="hpbar"><i class="${pct <= .25 ? 'low' : ''}" style="width:${Math.round(pct * 100)}%"></i></span>` : ''}</button>`;
+}
+function partyHTML() {
+  if (!myId) return '<p class="muted">Character sheets are available when you’re signed in to a campaign.</p>';
+  if (!isDM) {
+    return `<div class="party"><h3>Your character</h3>${pcCard(myId)}</div>
+      <p class="muted">Only you and your DMs can see your sheet. Tap any bonus on it to roll.</p>`;
+  }
+  const players = MEMBERS.filter((m) => m.role === 'player');
+  const extra = [...CH.keys()].filter((uid) => !players.some((m) => m.id === uid));
+  return `<div class="party"><h3>Party (${players.length})</h3>
+    ${players.length ? players.map((m) => pcCard(m.id)).join('') : '<p class="muted">No players have joined yet. Invite them from <b>Members</b>.</p>'}
+    ${extra.length ? `<h3 style="margin-top:8px">Other sheets</h3>${extra.map(pcCard).join('')}` : ''}</div>
+    <p class="muted">Each player fills in their own sheet. You can see and edit all of them.</p>`;
+}
+
+let csUid = null, csDirty = false;
+function openSheet(uid) {
+  if (!canEditSheet(uid) && !CH.has(uid)) return;
+  if (!CH.has(uid) && !chLoaded) { toast('Still loading character sheets. Try again in a moment.'); return; }
+  csUid = uid;
+  if (!CH.has(uid)) {
+    const fresh = { name: '', cls: '', level: 1, species: '', background: '', str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10, saves: {}, prof: {}, ds: { s: 0, f: 0 }, created: Date.now() };
+    CH.set(uid, fresh);
+    db.collection('characters').doc(uid).set(fresh).catch(writeErr);
+  }
+  $('#csModal').hidden = false;
+  renderSheet();
+  setTimeout(() => { const n = $('#cs-name'); if (n && !n.value) n.focus(); }, 30);
+}
+function closeSheet() { $('#csModal').hidden = true; csUid = null; if (tab === 'party') renderPane(true); }
+// Snapshots arriving while someone types would wipe their input, so wait until focus leaves.
+function refreshSheet() {
+  if ($('#csSheet').contains(document.activeElement) && document.activeElement.matches('input, textarea')) { csDirty = true; return; }
+  renderSheet();
+}
+function renderSheet() {
+  csDirty = false;
+  const c = CH.get(csUid) || {}, ed = canEditSheet(csUid), d = ed ? '' : ' disabled';
+  const inp = (k, label, ph = '', type = 'text') => `<div class="field"><label class="lbl" for="cs-${k}">${label}</label><input id="cs-${k}" type="${type}" value="${esc(c[k] ?? '')}" placeholder="${esc(ph)}" data-c="${k}"${d}></div>`;
+  const ta = (k, label, ph) => `<div class="field"><label class="lbl" for="cs-${k}">${label}</label><textarea id="cs-${k}" placeholder="${esc(ph)}" data-c="${k}"${d}>${esc(c[k] ?? '')}</textarea></div>`;
+  const pf = (k, v) => `<button type="button" class="pf p${v}" data-pf="${k}" title="${['Not proficient', 'Proficient', 'Expertise'][v]}" aria-label="${['Not proficient', 'Proficient', 'Expertise'][v]}"${d}>${['', '●', '◆'][v]}</button>`;
+  const ds = c.ds || {};
+  $('#csSheet').innerHTML = `
+    <div class="cs-head"><h2 id="csTitle">${esc(c.name || 'New character')}</h2>
+      <div class="btnrow">${ed ? '' : '<span class="chip">View only</span>'}<button type="button" class="primary" data-cs="close">Done</button></div></div>
+    <div class="cs-body">
+      <div class="cs-id">${inp('name', 'Character name', 'Brik Ironfoot')}${inp('cls', 'Class', 'Fighter')}${inp('level', 'Level', '1', 'number')}${inp('species', 'Species', 'Dwarf')}${inp('background', 'Background', 'Soldier')}</div>
+      <div class="cs-strip">
+        <div class="cs-box"><span class="lbl">AC</span><input id="cs-ac" value="${esc(c.ac ?? '')}" data-c="ac" aria-label="Armour class"${d}></div>
+        <div class="cs-box" style="grid-column: span 2"><span class="lbl">Hit points</span>
+          <div class="cs-hp"><input id="cs-hp" type="number" value="${esc(c.hp ?? '')}" data-c="hp" aria-label="Current HP"${d}><input id="cs-hpMax" type="number" value="${esc(c.hpMax ?? '')}" data-c="hpMax" aria-label="Max HP"${d}><input id="cs-hpTemp" type="number" value="${esc(c.hpTemp ?? '')}" data-c="hpTemp" aria-label="Temporary HP"${d}>
+          <small>Current</small><small>Max</small><small>Temp</small></div></div>
+        <div class="cs-box"><span class="lbl">Speed</span><input id="cs-speed" value="${esc(c.speed ?? '')}" placeholder="30 ft." data-c="speed" aria-label="Speed"${d}></div>
+        <div class="cs-box"><span class="lbl">Initiative</span><button type="button" class="roll" data-roll-cs="init" data-out="init"></button></div>
+        <div class="cs-box"><span class="lbl">Proficiency</span><span class="big" data-out="pb"></span></div>
+        <div class="cs-box"><span class="lbl">Passive Perc.</span><span class="big" data-out="pp"></span></div>
+        <div class="cs-box"><span class="lbl">Hit dice</span><input id="cs-hitDice" value="${esc(c.hitDice ?? '')}" placeholder="3d10" data-c="hitDice" aria-label="Hit dice"${d}></div>
+      </div>
+      <div class="cs-misc">
+        <label><input type="checkbox" data-c="insp"${c.insp ? ' checked' : ''}${d}> Inspiration</label>
+        <span class="dsg"><span class="lbl">Death saves</span> Successes ${[0, 1, 2].map((i) => `<input type="checkbox" data-ds="s" data-i="${i}" aria-label="Success ${i + 1}"${(ds.s || 0) > i ? ' checked' : ''}${d}>`).join('')}</span>
+        <span class="dsg">Failures ${[0, 1, 2].map((i) => `<input type="checkbox" data-ds="f" data-i="${i}" aria-label="Failure ${i + 1}"${(ds.f || 0) > i ? ' checked' : ''}${d}>`).join('')}</span>
+      </div>
+      <div class="cs-main">
+        <div class="cs-abil"><span class="lbl">Abilities · check · save</span>
+          ${ABILS.map(([a, l]) => `<div class="cs-ab"><span class="nm" title="${l}">${a.toUpperCase()}</span>
+            <input type="number" min="1" max="30" value="${esc(c[a] ?? 10)}" data-c="${a}" aria-label="${l} score"${d}>
+            <span class="mods"><button type="button" class="roll" data-roll-cs="${a}" data-out="mod.${a}" title="${l} check"></button>
+            <span style="display:flex;gap:4px;align-items:center"><button type="button" class="pf p${(c.saves || {})[a] ? 1 : 0}" data-save="${a}" title="Saving throw proficiency"${d}>${(c.saves || {})[a] ? '●' : ''}</button><button type="button" class="roll" data-roll-cs="save.${a}" data-out="save.${a}" title="${l} saving throw"></button></span></span></div>`).join('')}
+        </div>
+        <div class="cs-skills"><span class="lbl">Skills · tap the circle: proficient, then expertise</span>
+          ${SKILLS.map(([k, l, a]) => `<div class="cs-row">${pf(k, Number((c.prof || {})[k]) || 0)}<button type="button" class="roll" data-roll-cs="skill.${k}" data-out="skill.${k}"></button><span>${l}<span class="cs-abl">${a.toUpperCase()}</span></span></div>`).join('')}
+        </div>
+        <div class="cs-text">
+          ${ta('attacks', 'Attacks', 'Longsword: +5 to hit, 1d8+3 slashing')}
+          ${ta('spells', 'Spells', 'Cantrips, prepared spells, slots')}
+          ${ta('features', 'Features and traits', 'Second Wind, Darkvision…')}
+          ${ta('equipment', 'Equipment and money', 'Chain mail, shield, 15 gp')}
+          ${ta('notes', 'Notes', 'Backstory, bonds, goals')}
+        </div>
+      </div>
+      ${ed ? `<div class="btnrow"><button type="button" class="danger" data-cs="delete">Delete this sheet</button></div>` : ''}
+    </div>`;
+  updateDerived();
+}
+function updateDerived() {
+  const c = CH.get(csUid) || {}, f = (n) => (n >= 0 ? '+' : '−') + Math.abs(n);
+  const set = (k, v) => { const el = document.querySelector(`#csSheet [data-out="${k}"]`); if (el) el.textContent = v; };
+  set('pb', '+' + csPB(c)); set('init', f(csMod(c, 'dex')));
+  set('pp', 10 + csSkill(c, 'perception', 'wis'));
+  ABILS.forEach(([a]) => { set('mod.' + a, f(csMod(c, a))); set('save.' + a, f(csSave(c, a))); });
+  SKILLS.forEach(([k, , a]) => set('skill.' + k, f(csSkill(c, k, a))));
+  const t = $('#csTitle'); if (t) t.textContent = c.name || 'New character';
+}
+// Saves one field (or one nested field) and updates the numbers on screen.
+async function saveSheet(patch) {
+  const c = CH.get(csUid); if (!c || !canEditSheet(csUid)) return;
+  const merged = { ...c };
+  for (const [k, v] of Object.entries(patch)) merged[k] = v && typeof v === 'object' && !Array.isArray(v) ? { ...(c[k] || {}), ...v } : v;
+  CH.set(csUid, merged); updateDerived();
+  try { await db.collection('characters').doc(csUid).update(patch); } catch (e) { writeErr(e); }
+}
+function rollCs(key) {
+  const c = CH.get(csUid) || {}, r = d20();
+  let label, bonus;
+  if (key === 'init') { label = 'Initiative'; bonus = csMod(c, 'dex'); }
+  else if (key.startsWith('save.')) { const a = key.slice(5); label = ABILS.find((x) => x[0] === a)[1] + ' save'; bonus = csSave(c, a); }
+  else if (key.startsWith('skill.')) { const sk = SKILLS.find((x) => x[0] === key.slice(6)); label = sk[1]; bonus = csSkill(c, sk[0], sk[2]); }
+  else { label = ABILS.find((x) => x[0] === key)[1] + ' check'; bonus = csMod(c, key); }
+  toast(`${c.name || 'Character'} · ${label}: ${r + bonus} (${r} ${bonus < 0 ? '−' : '+'} ${Math.abs(bonus)})${r === 20 ? ' · natural 20' : r === 1 ? ' · natural 1' : ''}`);
+}
+$('#csSheet').addEventListener('change', (e) => {
+  const t = e.target, c = CH.get(csUid) || {};
+  if (t.dataset.ds) {
+    const k = t.dataset.ds, i = +t.dataset.i, cur = (c.ds || {})[k] || 0;
+    saveSheet({ ds: { [k]: cur > i ? i : i + 1 } }); renderSheet(); return;
+  }
+  const k = t.dataset.c; if (!k) return;
+  let v = t.type === 'checkbox' ? t.checked : t.value;
+  if (ABILS.some(([a]) => a === k)) { v = clamp(parseInt(v, 10) || 10, 1, 30); t.value = v; }
+  if (k === 'level') { v = clamp(parseInt(v, 10) || 1, 1, 20); t.value = v; }
+  if (['hp', 'hpMax', 'hpTemp'].includes(k)) v = v === '' ? '' : parseInt(v, 10) || 0;
+  if (c[k] === v) return;
+  saveSheet({ [k]: v });
+});
+$('#csSheet').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  const c = CH.get(csUid) || {};
+  if (b.dataset.cs === 'close') closeSheet();
+  else if (b.dataset.cs === 'delete') arm(b, 'csdel' + csUid, 'Click again to delete', async () => {
+    const uid = csUid; CH.delete(uid); closeSheet();
+    try { await db.collection('characters').doc(uid).delete(); toast('Character sheet deleted.'); } catch (err) { writeErr(err); }
+  });
+  else if (b.dataset.rollCs) rollCs(b.dataset.rollCs);
+  else if (b.dataset.pf) { const v = ((Number((c.prof || {})[b.dataset.pf]) || 0) + 1) % 3; saveSheet({ prof: { [b.dataset.pf]: v } }); renderSheet(); }
+  else if (b.dataset.save) { saveSheet({ saves: { [b.dataset.save]: !(c.saves || {})[b.dataset.save] } }); renderSheet(); }
+});
+$('#csSheet').addEventListener('focusout', (e) => { if (csDirty && !$('#csSheet').contains(e.relatedTarget)) setTimeout(renderSheet, 0); });
+$('#csModal').addEventListener('click', (e) => { if (e.target.id === 'csModal') closeSheet(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#csModal').hidden) closeSheet(); });
+
 function applyDm() {
   $('#pvBtn').hidden = !isDM;
   $('#pvBtn').setAttribute('aria-pressed', String(playerView));
@@ -1209,13 +1421,13 @@ function webHTML() {
 }
 let paneDirty = false;
 function renderPane(force) {
-  if (sel && sel.kind === 'token' && editable) refreshMembers();   // the host throttles this, so it's cheap
+  if (((sel && sel.kind === 'token') || tab === 'party') && editable) refreshMembers();   // the host throttles this, so it's cheap
   const pane = $('#pane');
   if (!force && pane.contains(document.activeElement) && document.activeElement.matches('input, textarea, select')) { paneDirty = true; return; }
   paneDirty = false;
   document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
   const st = pane.scrollTop;
-  pane.innerHTML = tab === 'npcs' ? rosterHTML() : tab === 'web' ? webHTML() : detailsHTML();
+  pane.innerHTML = tab === 'npcs' ? rosterHTML() : tab === 'web' ? webHTML() : tab === 'party' ? partyHTML() : detailsHTML();
   pane.scrollTop = st;
 }
 $('#pane').addEventListener('focusout', (e) => { if (paneDirty && !$('#pane').contains(e.relatedTarget)) setTimeout(() => renderPane(), 0); });
@@ -1309,6 +1521,7 @@ $('#pane').addEventListener('click', (e) => {
     D.npcs.set(o.id, { ...o, links }); renderPane(true); patch('npcs', o.id, { links });
   }
   else if (act === 'del-place' && cur) arm(b, 'dp' + cur.id, 'Click again to delete', () => deletePlace(cur.id));
+  else if (act === 'cs-open') { openSheet(b.dataset.uid); }
   else if (act === 'tok-img' && cur) { tokImgFor = cur.id; $('#tokImgIn').value = ''; }
   else if (act === 'tok-img-rm' && cur && canPicture(cur)) {
     const old = cur.img; D.tokens.set(cur.id, { ...cur, img: null }); render(true);
@@ -1403,6 +1616,12 @@ render();
     subscribeSecrets('dm/sheets/npcs', SH);
     subscribeSecrets('dm/sheets/places', PS);
   }
+  // Character sheets: the host sends a player only their own; DMs get everyone's.
+  if (myId) db.collection('characters').onSnapshot((snap) => {
+    CH.clear(); snap.docs.forEach((d) => CH.set(d.id, d.data())); chLoaded = true;
+    if (tab === 'party') renderPane();
+    if (!$('#csModal').hidden) refreshSheet();
+  }, onSnapErr);
   applyDm(); afterData(true);
 })();
 </script>
