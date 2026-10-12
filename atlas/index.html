@@ -231,7 +231,7 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
 .pin.tok.hid .disc { opacity: .55; border-style: dashed; }
 .pin.tok .disc.img { background: var(--ti) center / cover no-repeat, var(--tc); color: transparent; border-color: var(--tc); border-width: .16em; }
 .tokpic { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.tokpic .pv { width: 64px; height: 64px; border-radius: 50%; border: 3px solid var(--tc); background: var(--ti) center / cover no-repeat, var(--tc); display: grid; place-items: center; color: var(--tok-ink); font-weight: 700; font-size: 1.3rem; flex: none; }
+.tokpic .pv { width: 64px; height: 64px; border-radius: 50%; border: 3px solid var(--tc); background-color: var(--tc); background-image: var(--ti, none); background-size: cover; background-position: center; display: grid; place-items: center; color: var(--tok-ink); font-weight: 700; font-size: 1.3rem; flex: none; }
 /* Character sheets */
 .party { display: grid; gap: 8px; }
 .pc-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); text-align: left; font-weight: 400; width: 100%; }
@@ -307,6 +307,18 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
 }
 .castmenu { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 10px; border: 1px solid var(--accent); border-radius: 8px; background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
 .castmenu .lbl { margin-right: 4px; }
+/* Action ring: a character's attacks and spells fanned out around their token. */
+.ringlayer { position: absolute; inset: 0; pointer-events: none; }
+.aring { position: absolute; width: 0; height: 0; transform: scale(var(--inv)); transform-origin: 0 0; z-index: 4; }
+.aring .ai { position: absolute; pointer-events: auto; transform: translate(-50%, -50%); display: grid; justify-items: center; gap: 0; min-width: 84px; max-width: 150px; padding: 6px 10px; border-radius: 12px; border: 2px solid var(--accent); background: var(--surface); color: var(--ink); box-shadow: 0 4px 14px var(--shadow); font-weight: 700; font-size: 13px; line-height: 1.2; animation: ringIn .22s ease-out backwards; }
+.aring .ai:hover, .aring .ai:focus-visible { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+.aring .ai small { font-family: var(--mono); font-weight: 500; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.aring .ai span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px; }
+.aring .ai.spell { border-color: var(--brass); }
+.aring .ai.util { border-color: var(--line); min-width: 64px; }
+.aring .ai.lvl { border-color: var(--brass); min-width: 70px; }
+@keyframes ringIn { from { opacity: 0; transform: translate(-50%, -50%) scale(.6); } }
+@media (prefers-reduced-motion: reduce) { .aring .ai { animation: none; } }
 .rangelayer { position: absolute; inset: 0; pointer-events: none; }
 .rangering { position: absolute; border-radius: 50%; transform: translate(-50%, -50%); border: calc(2.5px * var(--inv)) solid var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .rangering.long { border-style: dashed; border-color: var(--brass); background: color-mix(in srgb, var(--brass) 6%, transparent); }
@@ -356,7 +368,7 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
   <main class="layout">
     <section class="mapwrap" id="mapwrap" aria-label="Map">
       <div class="viewport" id="vp">
-        <div class="stage" id="stage"><img id="mapImg" alt=""><div class="gridlayer" id="gridLayer" hidden></div><div class="rangelayer" id="rangeLayer"></div><div class="pins" id="pins"></div><div class="floats" id="floats"></div></div>
+        <div class="stage" id="stage"><img id="mapImg" alt=""><div class="gridlayer" id="gridLayer" hidden></div><div class="rangelayer" id="rangeLayer"></div><div class="pins" id="pins"></div><div class="floats" id="floats"></div><div class="ringlayer" id="ringLayer"></div></div>
       </div>
       <div class="mapbar">
         <div class="seg" id="upSeg" hidden><button type="button" id="upBtn" class="upbtn"></button></div>
@@ -562,6 +574,7 @@ const V = { s: 1, tx: 0, ty: 0, w: 1, h: 1, min: .05 };
 function applyView() {
   stage.style.transform = `translate(${V.tx}px, ${V.ty}px) scale(${V.s})`;
   stage.style.setProperty('--inv', 1 / V.s);
+  if (ringFor) layoutRing();
 }
 function fit() {
   const r = vp.getBoundingClientRect(); if (!r.width) return;
@@ -627,7 +640,7 @@ vp.addEventListener('pointermove', (e) => {
       const ok = mode === 'move' && (k === 'token' ? canMoveTok(D.tokens.get(gesture.pinEl.dataset.id)) : editable);
       if (!ok) gesture.kind = 'pan';
     }
-    if (gesture.kind === 'pin') gesture.pinEl.classList.add('dragging'); else vp.classList.add('panning');
+    if (gesture.kind === 'pin') { gesture.pinEl.classList.add('dragging'); closeRing(); } else vp.classList.add('panning');
   }
   if (!gesture.moved) return;
   if (gesture.kind === 'pan') {
@@ -664,6 +677,7 @@ function endPointer(e) {
   if (g.moved) return;
   if (g.kind === 'pin') { activatePin(g.pinEl.dataset.kind, g.pinEl.dataset.id); return; }
   const p = toMap(e.clientX, e.clientY);
+  if (ringFor) closeRing();
   if (p.x < 0 || p.x > 1 || p.y < 0 || p.y > 1) { if (sel) { sel = null; render(); } return; }
   if (mode === 'place') createPlace(p);
   else if (mode === 'npc') createNpc({ mapId: curMap, x: p.x, y: p.y });
@@ -684,6 +698,7 @@ function activatePin(kind, id) {
   const kids = kind === 'place' && mode === 'move' ? childMaps(id) : [];
   if (kids.length) { openMap(kids[0].id); return; }
   select(kind, id);
+  if (kind === 'token') openRing(id);
 }
 
 /* ---------- Modes ---------- */
@@ -704,7 +719,7 @@ function setMode(m, npcId) {
 }
 $('#modes').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setMode(b.dataset.mode); });
 $('#mySeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setMode(mode === 'mytoken' ? 'move' : 'mytoken'); });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && mode !== 'move') setMode('move'); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ringFor) { closeRing(); return; } if (e.key === 'Escape' && mode !== 'move') setMode('move'); });
 $('#labelsBtn').addEventListener('click', () => {
   showLabels = !showLabels; store.set('atlas-labels', showLabels ? '1' : '0');
   $('#labelsBtn').setAttribute('aria-pressed', String(showLabels)); $('#mapwrap').classList.toggle('hidelabels', !showLabels);
@@ -758,7 +773,7 @@ function openMap(id, keepSel) {
   render(true);
 }
 function loadImage() {
-  $('#floats').innerHTML = ''; clearRange();
+  $('#floats').innerHTML = ''; clearRange(); closeRing();
   const m = D.maps.get(curMap); if (!m) return;
   V.w = m.w || 1600; V.h = m.h || 1000;
   stage.style.width = V.w + 'px'; stage.style.height = V.h + 'px';
@@ -1142,14 +1157,19 @@ function rollAttack(a, what) {
 // Draws the attack's reach around the character's token on the open battle map (only for this viewer).
 let rangeTimer = null;
 function clearRange() { const l = $('#rangeLayer'); if (l) l.innerHTML = ''; clearTimeout(rangeTimer); }
-function showRange(a) {
-  const m = D.maps.get(curMap), t = sheetToken(csUid);
-  if (!isBattle(m) || !t) { toast('Open a battle map with this character’s token on it to see the range.', true); return; }
+// Draws normal (solid) and long (dashed) range around a token. Returns false off battle maps.
+function drawRange(t, normal, long) {
+  const m = D.maps.get(curMap);
+  if (!isBattle(m) || !t || t.mapId !== curMap) return false;
   const g = gridOf(m), w = m.w || 1600, h = m.h || 1000, rTok = g.cell * (t.size || 1) / 2;
-  const [normal, long] = atkRange(a);
   const ring = (ft, cls) => { const r = rTok + (ft / 5) * g.cell; return `<div class="rangering${cls}" style="left:${t.x * w}px;top:${t.y * h}px;width:${2 * r}px;height:${2 * r}px"></div>`; };
   clearRange();
   $('#rangeLayer').innerHTML = (long > normal ? ring(long, ' long') : '') + ring(normal, '');
+  return true;
+}
+function showRange(a) {
+  const t = sheetToken(csUid), [normal, long] = atkRange(a);
+  if (!drawRange(t, normal, long)) { toast('Open a battle map with this character\u2019s token on it to see the range.', true); return; }
   closeSheet();
   toast(`${a.name || 'Attack'}: ${normal} ft${long > normal ? `, up to ${long} ft at disadvantage (dashed)` : ''}. Hidden again in 20 seconds.`);
   rangeTimer = setTimeout(clearRange, 20000);
@@ -1260,8 +1280,85 @@ function castSpell(sp, chosen) {
   } else if (eff !== 'attack') {
     shareRoll({ uid: csUid, who, label: `Casts ${name}${note}`.slice(0, 40), total: '✨', detail: sp.conc ? 'concentration' : '', nat: null });
   }
-  renderSheet();
+  if (!$('#csModal').hidden) renderSheet();
 }
+
+/* ---------- Action ring ---------- */
+// The sheet that drives a token's actions: its own DM sheet, or the sheet of the player who moves it.
+function tokenSheetKey(t) {
+  if (!t || t.npcId) return null;
+  if (CH.has('tok:' + t.id) && isDM) return 'tok:' + t.id;
+  if (t.owner && CH.has(t.owner) && (t.owner === myId || isDM)) return t.owner;
+  return null;
+}
+let ringFor = null, ringItems = [];
+function closeRing() { ringFor = null; ringItems = []; const l = $('#ringLayer'); if (l) l.innerHTML = ''; }
+function openRing(tokId, levelsFor) {
+  const t = D.tokens.get(tokId), key = tokenSheetKey(t);
+  if (!t || !key || t.mapId !== curMap || !(canMoveTok(t) || isDM)) { closeRing(); return; }
+  const c = CH.get(key) || {};
+  ringFor = tokId;
+  if (levelsFor) {
+    ringItems = levelsFor.levels.map(([L, left]) => ({ kind: 'lvl', label: SPELL_LEVELS[L], sub: `${left} left`, act: () => { withSheet(key, () => castSpell(levelsFor.sp, L)); closeRing(); } }));
+    ringItems.push({ kind: 'util', label: 'Back', sub: '', act: () => openRing(tokId) });
+  } else {
+    const atks = (c.atks || []).map((a) => ({
+      kind: 'atk', label: a.name || 'Attack', sub: `${sgn(atkHit(c, a))} · ${a.dmg || '1d4'}`, range: atkRange(a),
+      act: () => { withSheet(key, () => { rollAttack(a, 'hit'); rollAttack(a, 'dmg'); }); closeRing(); },
+    }));
+    const spells = [...(c.splist || [])].filter((sp) => sp.prep !== false || !(parseInt(sp.level, 10) || 0))
+      .sort((a, b) => (a.level || 0) - (b.level || 0)).map((sp) => {
+        const lv = parseInt(sp.level, 10) || 0, ft = parseInt(sp.range, 10) || 0;
+        return { kind: 'spell', label: sp.name || 'Spell', sub: lv ? SPELL_LEVELS[lv] : 'cantrip', range: ft > 5 ? [ft, 0] : null, act: () => {
+          if (lv) {
+            const levels = castLevels(CH.get(key) || {}, lv);
+            if (!levels.length) { toast(`No spell slots left for ${sp.name || 'that spell'}.`, true); return; }
+            if (levels.length > 1) { openRing(tokId, { sp, levels }); return; }
+          }
+          withSheet(key, () => castSpell(sp)); closeRing();
+        } };
+      });
+    const all = [...atks, ...spells];
+    ringItems = all.slice(0, 11);
+    if (all.length > 11) ringItems.push({ kind: 'util', label: `${all.length - 11} more…`, sub: 'open sheet', act: () => { closeRing(); openSheet(key); } });
+    if (!all.length) ringItems.push({ kind: 'util', label: 'No attacks yet', sub: 'add them on the sheet', act: () => { closeRing(); openSheet(key); } });
+    ringItems.push({ kind: 'util', label: 'Sheet', sub: '', act: () => { closeRing(); openSheet(key); } });
+  }
+  $('#ringLayer').innerHTML = `<div class="aring" id="aring">${ringItems.map((it, i) => `<button type="button" class="ai${it.kind === 'atk' ? '' : ' ' + it.kind}" data-ri="${i}" style="animation-delay:${i * 25}ms"><span>${esc(it.label)}</span>${it.sub ? `<small>${esc(it.sub)}</small>` : ''}</button>`).join('')}</div>`;
+  layoutRing();
+}
+// Positions the ring's buttons in a circle just outside the token, in screen pixels.
+function layoutRing() {
+  const t = D.tokens.get(ringFor), m = D.maps.get(curMap), el = $('#aring');
+  if (!t || !m || !el) { closeRing(); return; }
+  const w = m.w || 1600, h = m.h || 1000, n = ringItems.length;
+  const tokR = isBattle(m) ? gridOf(m).cell * (t.size || 1) * .45 * V.s : 18;
+  const R = Math.max(tokR + 64, 26 * n);
+  el.style.left = t.x * w + 'px'; el.style.top = t.y * h + 'px';
+  [...el.children].forEach((b, i) => {
+    const ang = -Math.PI / 2 + (i / n) * Math.PI * 2;
+    b.style.left = Math.cos(ang) * R + 'px'; b.style.top = Math.sin(ang) * R * .82 + 'px';
+  });
+}
+// Runs sheet actions (rolls, casting) for a sheet that isn't open in the sheet window.
+function withSheet(key, fn) {
+  const prev = csUid; csUid = key;
+  try { fn(); } finally { csUid = prev; }
+}
+// The ring sits over the map, so keep its taps from starting a pan or drag underneath.
+$('#ringLayer').addEventListener('pointerdown', (e) => { if (e.target.closest('[data-ri]')) e.stopPropagation(); });
+$('#ringLayer').addEventListener('pointerup', (e) => { if (e.target.closest('[data-ri]')) e.stopPropagation(); });
+$('#ringLayer').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-ri]'); if (!b) return;
+  e.stopPropagation(); clearRange();
+  const it = ringItems[+b.dataset.ri]; if (it) it.act();
+});
+$('#ringLayer').addEventListener('pointerover', (e) => {
+  const b = e.target.closest('[data-ri]'); if (!b) return;
+  const it = ringItems[+b.dataset.ri];
+  if (it && it.range) drawRange(D.tokens.get(ringFor), it.range[0], it.range[1]); else clearRange();
+});
+$('#ringLayer').addEventListener('pointerout', (e) => { if (e.target.closest('[data-ri]') && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('[data-ri]'))) clearRange(); });
 
 function rollCs(key) {
   const c = CH.get(csUid) || {}, r = d20();
@@ -1305,7 +1402,7 @@ $('#csSheet').addEventListener('change', (e) => {
       const next = { ...a, [k]: v };
       // A new range type brings sensible defaults: ranged weapons use DEX, thrown 20/60, bows 80/320.
       if (k === 'range' && v === 'thrown' && !a.normal) Object.assign(next, { normal: 20, long: 60 });
-      if (k === 'range' && v === 'ranged' && !a.normal) Object.assign(next, { normal: 80, long: 320, ability: a.ability === 'str' ? 'dex' : a.ability });
+      if (k === 'range' && v === 'ranged' && !a.normal) Object.assign(next, { normal: 80, long: 320, ability: a.ability === 'str' ? 'dex' : a.ability, dmgType: !a.dmgType || a.dmgType === 'slashing' ? 'piercing' : a.dmgType });
       return next;
     });
     saveSheet({ atks }); if (['range', 'ability'].includes(k)) renderSheet(); else updateAttackNumbers();
@@ -1551,6 +1648,7 @@ function renderMap() {
   $('#tokModeBtn').hidden = !battle;
   $('#mySeg').hidden = !battle || isDM || !myId;
   window.__atlasFast = battle;   // the host refreshes faster while a battle map is open
+  if (ringFor) layoutRing();     // follow the token if it moved
   const parentPlace = m.placeId && D.places.get(m.placeId);
   const parentMap = parentPlace && D.maps.get(parentPlace.mapId);
   $('#upSeg').hidden = !parentMap;
