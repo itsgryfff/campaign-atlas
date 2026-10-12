@@ -273,6 +273,19 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
 .cs-misc label, .cs-misc .dsg { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .cs-misc input[type=checkbox] { width: 18px; height: 18px; margin: 0; flex: none; accent-color: var(--accent); }
 @media (max-width: 860px) { .cs-main { grid-template-columns: minmax(0, 1fr); } .cs-id { grid-template-columns: 1fr 1fr; } }
+/* Dice rolls float up from the roller's token and fade out over 15 seconds. */
+.floats { position: absolute; inset: 0; pointer-events: none; }
+.rollfloat { position: absolute; transform: translate(-50%, -100%) scale(var(--inv)); transform-origin: 50% 100%; z-index: 3; }
+.rollfloat .rf { display: grid; justify-items: center; gap: 0; padding: 6px 12px 7px; border-radius: 10px; background: var(--surface); color: var(--ink); border: 2px solid var(--accent); box-shadow: 0 4px 14px var(--shadow); white-space: nowrap; animation: rollUp 15s linear forwards; }
+.rollfloat .rf .who { font-size: 11px; color: var(--muted); font-weight: 700; letter-spacing: .04em; }
+.rollfloat .rf .what { font-size: 13px; font-weight: 600; }
+.rollfloat .rf .tot { font-family: var(--mono); font-size: 26px; font-weight: 700; line-height: 1.1; }
+.rollfloat .rf .det { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.rollfloat.nat20 .rf { border-color: var(--brass); } .rollfloat.nat20 .tot { color: var(--brass); }
+.rollfloat.nat1 .rf { border-color: var(--bad); } .rollfloat.nat1 .tot { color: var(--bad); }
+@keyframes rollUp { 0% { transform: translateY(8px); opacity: 0; } 3% { transform: translateY(0); opacity: 1; } 45% { opacity: 1; } 100% { transform: translateY(-140px); opacity: 0; } }
+@keyframes rollFade { 0% { opacity: 0; } 3% { opacity: 1; } 45% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .rollfloat .rf { animation-name: rollFade; } }
 .swatches { display: flex; gap: 6px; flex-wrap: wrap; }
 .sw { width: 28px; height: 28px; border-radius: 50%; padding: 0; background: var(--sw); border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--line); }
 .sw:hover { background: var(--sw); filter: brightness(1.1); }
@@ -301,7 +314,7 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
   <main class="layout">
     <section class="mapwrap" id="mapwrap" aria-label="Map">
       <div class="viewport" id="vp">
-        <div class="stage" id="stage"><img id="mapImg" alt=""><div class="gridlayer" id="gridLayer" hidden></div><div class="pins" id="pins"></div></div>
+        <div class="stage" id="stage"><img id="mapImg" alt=""><div class="gridlayer" id="gridLayer" hidden></div><div class="pins" id="pins"></div><div class="floats" id="floats"></div></div>
       </div>
       <div class="mapbar">
         <div class="seg" id="upSeg" hidden><button type="button" id="upBtn" class="upbtn"></button></div>
@@ -375,7 +388,8 @@ const PUB = { maps: new Map(), places: new Map(), npcs: new Map(), tokens: new M
 const HID = { maps: new Map(), places: new Map(), npcs: new Map(), tokens: new Map() };
 const ALL = { maps: new Map(), places: new Map(), npcs: new Map(), tokens: new Map() };
 let MEMBERS = [], myId = null, myName = '';
-let tokenImgs = null;   // the host's token-picture uploader, when it has one (players can use it too)   // campaign members and who is viewing, when the host provides them
+let tokenImgs = null;
+let rollsCap = null;    // the host's shared roll feed, when it has one   // the host's token-picture uploader, when it has one (players can use it too)   // campaign members and who is viewing, when the host provides them
 const SH = new Map();   // npc id -> { sheet, sheetFile }, readable by the DM only
 const PS = new Map();   // place id -> { secret }, readable by the DM only
 let D = ALL;
@@ -702,6 +716,7 @@ function openMap(id, keepSel) {
   render(true);
 }
 function loadImage() {
+  $('#floats').innerHTML = '';
   const m = D.maps.get(curMap); if (!m) return;
   V.w = m.w || 1600; V.h = m.h || 1000;
   stage.style.width = V.w + 'px'; stage.style.height = V.h + 'px';
@@ -989,7 +1004,11 @@ function rollCs(key) {
   else if (key.startsWith('save.')) { const a = key.slice(5); label = ABILS.find((x) => x[0] === a)[1] + ' save'; bonus = csSave(c, a); }
   else if (key.startsWith('skill.')) { const sk = SKILLS.find((x) => x[0] === key.slice(6)); label = sk[1]; bonus = csSkill(c, sk[0], sk[2]); }
   else { label = ABILS.find((x) => x[0] === key)[1] + ' check'; bonus = csMod(c, key); }
-  toast(`${c.name || 'Character'} · ${label}: ${r + bonus} (${r} ${bonus < 0 ? '−' : '+'} ${Math.abs(bonus)})${r === 20 ? ' · natural 20' : r === 1 ? ' · natural 1' : ''}`);
+  const total = r + bonus, detail = `${r} ${bonus < 0 ? '\u2212' : '+'} ${Math.abs(bonus)}`, nat = r === 20 ? 20 : r === 1 ? 1 : null;
+  const roll = { uid: csUid, who: c.name || memberName(csUid), label, total, detail, nat };
+  toast(`${roll.who} \u00b7 ${label}: ${total} (${detail})${nat === 20 ? ' \u00b7 natural 20' : nat === 1 ? ' \u00b7 natural 1' : ''}`);
+  floatRoll(tokensOn(curMap).find((t) => t.owner === csUid), roll, 0);
+  if (rollsCap) rollsCap.send(roll).catch(() => {});
 }
 $('#csSheet').addEventListener('change', (e) => {
   const t = e.target, c = CH.get(csUid) || {};
@@ -1020,6 +1039,36 @@ $('#csSheet').addEventListener('click', (e) => {
 $('#csSheet').addEventListener('focusout', (e) => { if (csDirty && !$('#csSheet').contains(e.relatedTarget)) setTimeout(renderSheet, 0); });
 $('#csModal').addEventListener('click', (e) => { if (e.target.id === 'csModal') closeSheet(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#csModal').hidden) closeSheet(); });
+
+/* ---------- Floating rolls ---------- */
+const ROLL_MS = 15000;
+const shownRolls = new Set();
+// Shows a roll above a token on the open map. `age` lets a roll that arrived late start part-way through.
+function floatRoll(t, roll, age) {
+  const m = D.maps.get(curMap);
+  if (!t || !m || t.mapId !== curMap || age >= ROLL_MS) return false;
+  const r = isBattle(m) ? gridOf(m).cell * (t.size || 1) * .45 : 16;
+  const el = document.createElement('div');
+  el.className = 'rollfloat' + (roll.nat === 20 ? ' nat20' : roll.nat === 1 ? ' nat1' : '');
+  el.style.left = t.x * 100 + '%'; el.style.top = t.y * 100 + '%'; el.style.marginTop = -r + 'px';
+  el.innerHTML = `<div class="rf" style="animation-delay:-${Math.round(age)}ms"><span class="who">${esc(roll.who || '')}</span><span class="what">${esc(roll.label || '')}</span><span class="tot">${esc(roll.total)}</span><span class="det">${esc(roll.detail || '')}${roll.nat === 20 ? ' · nat 20' : roll.nat === 1 ? ' · nat 1' : ''}</span></div>`;
+  $('#floats').appendChild(el);
+  setTimeout(() => el.remove(), ROLL_MS - age + 100);
+  return true;
+}
+// Rolls other people made, delivered by the host with its clock (`now`) so ages are right.
+window.addEventListener('atlas-rolls', (e) => {
+  const { rolls = [], now = Date.now() } = e.detail || {};
+  [...rolls].reverse().forEach((roll) => {
+    if (shownRolls.has(roll.id)) return;
+    shownRolls.add(roll.id);
+    if (roll.by === myId) return;   // our own rolls were shown when we made them
+    const age = now - roll.at;
+    if (age >= ROLL_MS) return;
+    const shown = floatRoll(tokensOn(curMap).find((t) => t.owner === roll.uid), roll, age);
+    if (!shown && age < 5000) toast(`${roll.who} · ${roll.label}: ${roll.total} (${roll.detail})${roll.nat === 20 ? ' · natural 20' : roll.nat === 1 ? ' · natural 1' : ''}`);
+  });
+});
 
 function applyDm() {
   $('#pvBtn').hidden = !isDM;
@@ -1547,8 +1596,12 @@ $('#pane').addEventListener('click', (e) => {
   }
   else if (act === 'roll-abil' && cur) {
     const r = d20(), m = abMod(((SH.get(cur.id) || {}).sheet || {})[b.dataset.ab]);
-    toast(`${cur.name} · ${b.dataset.ab.toUpperCase()} check: ${r + m} (${r} ${m < 0 ? '−' : '+'} ${Math.abs(m)})${r === 20 ? ' · natural 20' : r === 1 ? ' · natural 1' : ''}`);
+    const roll = { who: cur.name, label: b.dataset.ab.toUpperCase() + ' check', total: r + m, detail: `${r} ${m < 0 ? '\u2212' : '+'} ${Math.abs(m)}`, nat: r === 20 ? 20 : r === 1 ? 1 : null };
+    toast(`${roll.who} \u00b7 ${roll.label}: ${roll.total} (${roll.detail})${roll.nat === 20 ? ' \u00b7 natural 20' : roll.nat === 1 ? ' \u00b7 natural 1' : ''}`);
+    // NPC rolls stay on the DM's screen: shown over the NPC's token here, never shared.
+    floatRoll(tokensOn(curMap).find((t) => t.npcId === cur.id), roll, 0);
   }
+
   else if (act === 'sheet-attach' && cur) { sheetFor = cur.id; $('#sheetIn').value = ''; }
   else if (act === 'sheet-remove' && cur) arm(b, 'sr' + cur.id, 'Click again to remove', async () => {
     const old = (SH.get(cur.id) || {}).sheetFile;
@@ -1608,6 +1661,7 @@ render();
     if (u && u.members) MEMBERS = await u.members();
     userCap = u;
     tokenImgs = await c.use('tokenImages').catch(() => null);
+    rollsCap = await c.use('rolls').catch(() => null);
   } catch (e) {}
   if (isDM && !assets) console.warn('Atlas: assets capability unavailable in this view; map uploads disabled.');
   ['maps', 'places', 'npcs', 'tokens'].forEach((col) => subscribe(col, false));
