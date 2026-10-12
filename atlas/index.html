@@ -230,6 +230,11 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
 .vis.off { border-style: dashed; background: var(--hover); }
 .pvtoggle[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .pvbanner { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; background: var(--accent); color: var(--on-accent); padding: 8px 12px; border-radius: 8px; font-size: .88rem; font-weight: 600; box-shadow: 0 2px 8px var(--shadow); }
+.lockbar { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface); color: var(--ink); border: 2px solid var(--brass); padding: 8px 12px; border-radius: 8px; font-size: .88rem; font-weight: 600; box-shadow: 0 2px 8px var(--shadow); }
+.lockbar .btnrow { gap: 6px; }
+.pvbanner:not([hidden]) ~ .lockbar { bottom: 64px; }
+#lockBtn[aria-pressed="true"] { background: var(--brass); color: var(--surface); border-color: var(--brass); }
+#mapSel:disabled { opacity: .7; }
 .pvbanner button { background: var(--surface); color: var(--ink); border-color: var(--surface); }
 .rolechip { font-size: .72rem; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--accent); color: var(--accent); font-weight: 700; }
 .lbl .aside { text-transform: none; letter-spacing: 0; font-weight: 400; }
@@ -414,8 +419,10 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
           <button type="button" id="zFit">Fit</button>
         </div>
         <div class="seg"><button type="button" id="labelsBtn" aria-pressed="true">Labels</button></div>
+        <div class="seg" id="lockSeg" hidden><button type="button" id="lockBtn" aria-pressed="false">Lock players here</button></div>
       </div>
       <div class="pvbanner" id="pvBanner" hidden><span>Player view: this is what your players see. Hidden maps, places and NPCs are left out.</span><button type="button" id="pvExit">Back to DM view</button></div>
+      <div class="lockbar" id="lockBar" hidden></div>
       <div class="hintbar" id="hint" hidden></div>
       <div class="mapempty" id="mapEmpty" hidden></div>
       <div class="dropzone" id="dropzone" hidden>Drop the image to add it as a map</div>
@@ -478,6 +485,10 @@ const ALL = { maps: new Map(), places: new Map(), npcs: new Map(), tokens: new M
 let MEMBERS = [], myId = null, myName = '';
 let tokenImgs = null;
 let rollsCap = null;
+let LOCK = null;        // the map the DM is keeping every player on, or null
+// The map this viewer is held on: players (and a DM previewing the player view) follow the DM's lock
+// while that map is visible to them.
+const lockedMap = () => ((!isDM || playerView) && LOCK && D.maps.has(LOCK) ? LOCK : null);
 let linksCap = null;    // the host's party-connections writer, when it has one
 const PL = new Map();   // party connections: id -> { a, b, rel, label, by, byName, at }
 let notesCap = null;    // the host's party-notes writer, when it has one
@@ -733,7 +744,7 @@ vp.addEventListener('keydown', (e) => {
 });
 // A place with its own map opens that map; anything else shows its details.
 function activatePin(kind, id) {
-  const kids = kind === 'place' && mode === 'move' ? childMaps(id) : [];
+  const kids = kind === 'place' && mode === 'move' && !lockedMap() ? childMaps(id) : [];
   if (kids.length) { openMap(kids[0].id); return; }
   select(kind, id);
   if (kind === 'token') openRing(id);
@@ -799,12 +810,14 @@ function select(kind, id, noCenter) {
   if (kind === 'token') refreshMembers();
   sel = { kind, id }; tab = 'details';
   const rec = kind === 'place' ? D.places.get(id) : kind === 'token' ? D.tokens.get(id) : D.npcs.get(id);
-  if (rec && rec.mapId && rec.mapId !== curMap && D.maps.has(rec.mapId)) { openMap(rec.mapId, true); }
+  if (rec && rec.mapId && rec.mapId !== curMap && D.maps.has(rec.mapId) && !lockedMap()) { openMap(rec.mapId, true); }
   render(true);
   if (!noCenter && rec && rec.mapId === curMap && rec.x != null) centerOn(rec.x, rec.y);
 }
 function openMap(id, keepSel) {
   if (!D.maps.has(id)) return;
+  const lk = lockedMap();
+  if (lk && id !== lk) { toast('The DM has locked everyone to this map for now.'); renderHeader(); return; }
   if (curMap !== id) { curMap = id; store.set('atlas-map', id); userMoved = false; loadImage(); }
   if (!keepSel) sel = null;
   setMode('move');
@@ -1703,7 +1716,7 @@ function renderMap() {
   if (ringFor) layoutRing();     // follow the token if it moved
   const parentPlace = m.placeId && D.places.get(m.placeId);
   const parentMap = parentPlace && D.maps.get(parentPlace.mapId);
-  $('#upSeg').hidden = !parentMap;
+  $('#upSeg').hidden = !parentMap || !!lockedMap();
   if (parentMap) { $('#upBtn').textContent = '↑ ' + parentMap.name; $('#upBtn').dataset.map = parentMap.id; $('#upBtn').dataset.place = parentPlace.id; }
 }
 $('#upBtn').addEventListener('click', (e) => {
@@ -1735,7 +1748,44 @@ function renderHeader() {
   ms.hidden = !ordered.length;
   ms.innerHTML = ordered.map((m) => `<option value="${m.id}"${m.id === curMap ? ' selected' : ''}>${'\u2003'.repeat(depth(m))}${esc(m.name)}${m._h ? ' (hidden)' : ''}</option>`).join('');
   $('#uploadTop').hidden = !editable;
+  renderLock();
 }
+function renderLock() {
+  const lk = lockedMap();
+  $('#mapSel').disabled = !!lk;
+  if (lk) $('#crumbs').querySelectorAll('button[data-map]').forEach((b) => { b.disabled = true; });
+  const bar = $('#lockBar'), seg = $('#lockSeg'), btn = $('#lockBtn');
+  seg.hidden = !editable || !curMap;
+  const cur = curMap && ALL.maps.get(curMap);
+  if (editable && cur) {
+    const here = LOCK === curMap;
+    btn.setAttribute('aria-pressed', String(here));
+    btn.textContent = here ? '🔒 Unlock players' : 'Lock players here';
+    btn.disabled = !here && !!cur._h;
+    btn.title = !here && cur._h ? 'Make this map visible to players before locking them to it.' : here ? 'Let players switch maps again' : 'Keep every player on this map';
+  }
+  const lockRec = LOCK && ALL.maps.get(LOCK);
+  if (editable && lockRec) {
+    const here = LOCK === curMap;
+    bar.innerHTML = `<span>🔒 ${here ? 'Players are locked to this map.' : `Players are locked to <b>${esc(lockRec.name)}</b>.`}${lockRec._h ? ' It’s hidden, so players can move freely until you show it.' : ''}</span>
+      <span class="btnrow">${here ? '' : `<button type="button" data-lock="go">Go there</button>`}<button type="button" data-lock="off">Unlock</button></span>`;
+    bar.hidden = false;
+  } else if (lk) {
+    bar.innerHTML = `<span>🔒 The DM is keeping everyone on this map.</span>`;
+    bar.hidden = false;
+  } else bar.hidden = true;
+}
+async function setLock(mapId) {
+  const prev = LOCK; LOCK = mapId; renderLock();
+  try { await db.collection('settings').doc('view').set({ lockMap: mapId, at: Date.now() }); toast(mapId ? 'Players are locked to this map.' : 'Players can switch maps again.'); }
+  catch (e) { LOCK = prev; renderLock(); writeErr(e); }
+}
+$('#lockBtn').addEventListener('click', () => { if (editable && curMap) setLock(LOCK === curMap ? null : curMap); });
+$('#lockBar').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-lock]'); if (!b || !editable) return;
+  if (b.dataset.lock === 'off') setLock(null);
+  else if (b.dataset.lock === 'go' && LOCK) openMap(LOCK);
+});
 $('#crumbs').addEventListener('click', (e) => { const b = e.target.closest('[data-map]'); if (b) openMap(b.dataset.map); });
 $('#mapSel').addEventListener('change', (e) => openMap(e.target.value));
 
@@ -2273,6 +2323,12 @@ function afterData(force) {
   rebuild();
   if (curMap && !D.maps.has(curMap)) curMap = null;
   if (!curMap && D.maps.size) { const top = mapsList().find((m) => !m.placeId) || mapsList()[0]; curMap = top.id; }
+  const lk = lockedMap();
+  if (lk && curMap !== lk) {
+    const moved = !!curMap; curMap = lk; userMoved = false; setMode('move');
+    if (sel && sel.kind === 'token') sel = null;
+    if (moved) toast(`The DM moved everyone to ${D.maps.get(lk).name}.`);
+  }
   const m = curMap && D.maps.get(curMap);
   if (m && img.getAttribute('src') !== '/_blob/' + m.asset) loadImage();
   if (sel && !(sel.kind === 'place' ? D.places : sel.kind === 'token' ? D.tokens : D.npcs).has(sel.id)) sel = null;
@@ -2324,6 +2380,11 @@ render();
     subscribeSecrets('dm/sheets/places', PS);
   }
   // Character sheets: the host sends a player only their own; DMs get everyone's.
+  db.collection('settings').onSnapshot((snap) => {
+    const v = snap.docs.find((d) => d.id === 'view');
+    LOCK = (v && v.data().lockMap) || null;
+    afterData();
+  }, onSnapErr);
   db.collection('partylinks').onSnapshot((snap) => {
     PL.clear(); snap.docs.forEach((d) => PL.set(d.id, d.data()));
     renderPane();
