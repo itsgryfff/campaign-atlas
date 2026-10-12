@@ -18,6 +18,7 @@
   --tint: #fbf3df;
   --bad: #b3261e;
   --good: #2a7a4b;
+  --love: #b53f7a;
   --well: #d9e0e6;
   --shadow: rgba(16, 24, 36, .28);
   --gridline: rgba(20, 20, 20, .38);
@@ -31,13 +32,13 @@
   :root:not([data-theme="light"]) {
     --bg: #11151b; --surface: #19202a; --hover: #212a36; --ink: #e2e7ee; --muted: #8e9bad; --line: #2c3543;
     --grid: rgba(143, 176, 236, .05); --accent: #8fb0ec; --on-accent: #0f1726; --brass: #e2b24c; --tint: #2a2516;
-    --bad: #f2776c; --good: #6fcf97; --well: #0c1015; --shadow: rgba(0, 0, 0, .55); color-scheme: dark;
+    --bad: #f2776c; --good: #6fcf97; --love: #f08bbf; --well: #0c1015; --shadow: rgba(0, 0, 0, .55); color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #11151b; --surface: #19202a; --hover: #212a36; --ink: #e2e7ee; --muted: #8e9bad; --line: #2c3543;
   --grid: rgba(143, 176, 236, .05); --accent: #8fb0ec; --on-accent: #0f1726; --brass: #e2b24c; --tint: #2a2516;
-  --bad: #f2776c; --good: #6fcf97; --well: #0c1015; --shadow: rgba(0, 0, 0, .55); color-scheme: dark;
+  --bad: #f2776c; --good: #6fcf97; --love: #f08bbf; --well: #0c1015; --shadow: rgba(0, 0, 0, .55); color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; }
@@ -171,10 +172,25 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
 
 .graph { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 8px; background: var(--hover); }
 .graph text { font-family: var(--body); fill: var(--ink); }
-.graph .edge { stroke: var(--muted); stroke-width: 1.5; }
-.graph .edge.hot { stroke: var(--brass); stroke-width: 2.5; }
+.graph .edge { stroke: var(--rel); stroke-width: 2.5; fill: none; }
+.graph .edge.r-hostile { stroke-dasharray: 7 4; }
+.graph .edge.r-rival { stroke-dasharray: 2 4; stroke-linecap: round; }
 .graph .elab { font-size: 9px; fill: var(--muted); paint-order: stroke; stroke: var(--hover); stroke-width: 3px; }
-.graph .elab.hot { fill: var(--ink); font-weight: 700; }
+.graph .node.focus circle { fill: var(--tint); stroke-width: 4; }
+.graph .node.focus .ini { font-size: 14px; }
+.r-friendly { --rel: var(--good); } .r-hostile { --rel: var(--bad); } .r-rival { --rel: var(--brass); }
+.r-family { --rel: var(--accent); } .r-romance { --rel: var(--love); } .r-neutral { --rel: var(--muted); }
+.relchip { display: inline-block; font-size: .72rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; color: var(--rel); border: 1px solid var(--rel); background: color-mix(in srgb, var(--rel) 10%, transparent); white-space: nowrap; }
+.link-row .relsel { font-size: .8rem; padding: .15rem .3rem; width: auto; color: var(--rel); border-color: var(--rel); font-weight: 700; }
+.link-row .acts { display: flex; align-items: center; gap: 4px; }
+.addlink.rel3 { grid-template-columns: minmax(0, 1fr) auto; }
+.addlink.rel3 #lLabel { grid-column: 1 / -1; }
+.webhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.webhead h3 { margin: 0; }
+.legend i.ln { width: 18px; height: 0; border-radius: 0; border: 0; border-top: 3px solid var(--rel); }
+.legend i.ln.r-hostile { border-top-style: dashed; } .legend i.ln.r-rival { border-top-style: dotted; }
+.relcount { display: flex; gap: 3px; align-items: center; }
+.relcount i { width: 8px; height: 8px; border-radius: 50%; background: var(--rel); display: inline-block; }
 .graph .node { cursor: pointer; }
 .graph .node circle { fill: var(--surface); stroke: var(--muted); stroke-width: 3; }
 .graph .node.att-friendly circle { stroke: var(--good); }
@@ -425,6 +441,11 @@ const PLACE_TYPES = [
   ['city', 'City'], ['town', 'Town'], ['village', 'Village'], ['dungeon', 'Dungeon'],
   ['landmark', 'Landmark'], ['wilderness', 'Wilderness'], ['poi', 'Point of interest'],
 ];
+// How two NPCs feel about each other. Links saved before this existed count as neutral.
+const RELS = [['neutral', 'Neutral'], ['friendly', 'Friendly'], ['hostile', 'Hostile'], ['rival', 'Rival'], ['family', 'Family'], ['romance', 'Romance']];
+const relOf = (l) => (RELS.some(([v]) => v === l.rel) ? l.rel : 'neutral');
+const relName = (r) => (RELS.find(([v]) => v === r) || RELS[0])[1];
+let webFocus = null;   // the NPC the Connections tab is centred on; null shows the list
 const ATTITUDES = [['friendly', 'Friendly'], ['neutral', 'Neutral'], ['hostile', 'Hostile'], ['unknown', 'Unknown']];
 const GLYPH = {
   city: 'M10 22v-7l2-2v-3h2v3h2v-3h2v3l2 2v7z',
@@ -1772,10 +1793,10 @@ function placeHTML(p) {
     ${editable ? `<div class="section"><div class="btnrow"><button type="button" class="danger" data-act="del-place">Delete place</button></div></div>` : ''}`;
 }
 function linksOf(n) {
-  const out = (n.links || []).filter((l) => D.npcs.has(l.to)).map((l) => ({ other: D.npcs.get(l.to), label: l.label, owner: n.id, to: l.to }));
+  const out = (n.links || []).filter((l) => D.npcs.has(l.to)).map((l) => ({ other: D.npcs.get(l.to), label: l.label, rel: relOf(l), owner: n.id, to: l.to }));
   for (const o of D.npcs.values()) {
     if (o.id === n.id) continue;
-    for (const l of o.links || []) if (l.to === n.id) out.push({ other: o, label: l.label, owner: o.id, to: n.id, rev: true });
+    for (const l of o.links || []) if (l.to === n.id) out.push({ other: o, label: l.label, rel: relOf(l), owner: o.id, to: n.id, rev: true });
   }
   return out;
 }
@@ -1920,6 +1941,13 @@ function tokensSection(n) {
     ${editable && isBattle(here) ? `<div class="btnrow"><button type="button" data-act="tok-npc">Place token on ${esc(here.name)}</button></div>` : ''}
   </div>`;
 }
+function linkRowHTML(l) {
+  const kind = editable
+    ? `<select class="relsel r-${l.rel}" data-rel-owner="${l.owner}" data-rel-to="${l.to}" aria-label="Relationship with ${esc(l.other.name)}">${RELS.map(([v, t]) => `<option value="${v}"${v === l.rel ? ' selected' : ''}>${t}</option>`).join('')}</select>`
+    : `<span class="relchip r-${l.rel}">${relName(l.rel)}</span>`;
+  return `<div class="link-row"><div class="who"><button type="button" class="link" data-sel="npc" data-id="${l.other.id}">${esc(l.other.name)}</button> <span class="lab">${esc(l.label || '')}</span></div>
+    <div class="acts">${kind}${editable ? `<button type="button" class="x" data-act="unlink" data-owner="${l.owner}" data-to="${l.to}" aria-label="Remove connection with ${esc(l.other.name)}">×</button>` : ''}</div></div>`;
+}
 function npcHTML(n) {
   const links = linksOf(n);
   const others = [...D.npcs.values()].filter((o) => o.id !== n.id).sort((a, b) => a.name.localeCompare(b.name));
@@ -1945,9 +1973,9 @@ function npcHTML(n) {
       ${editable && curMap ? `<div class="btnrow"><button type="button" data-act="pin-npc">${onMap ? 'Move pin to this map' : 'Pin on this map'}</button>${onMap ? '<button type="button" data-act="unpin-npc">Remove pin</button>' : ''}</div>` : ''}
     </div>
     ${tokensSection(n)}
-    <div class="section"><h3>Connections (${links.length})</h3>
-      ${links.length ? `<div class="links">${links.map((l) => `<div class="link-row"><div class="who"><button type="button" class="link" data-sel="npc" data-id="${l.other.id}">${esc(l.other.name)}</button> <span class="lab">${esc(l.label || 'knows')}</span></div>${editable ? `<button type="button" class="x" data-act="unlink" data-owner="${l.owner}" data-to="${l.to}" aria-label="Remove connection with ${esc(l.other.name)}">×</button>` : ''}</div>`).join('')}</div>` : '<p class="muted">No connections yet.</p>'}
-      ${editable && others.length ? `<form class="addlink" id="linkForm"><select id="lTo" aria-label="Connect to">${others.map((o) => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select><input id="lLabel" placeholder="owes money to" aria-label="Relationship"><button type="submit">Add</button></form>` : ''}
+    <div class="section"><div class="section-head"><h3>Connections (${links.length})</h3><button type="button" data-act="web-npc" data-id="${n.id}">View web</button></div>
+      ${links.length ? `<div class="links">${links.map(linkRowHTML).join('')}</div>` : '<p class="muted">No connections yet.</p>'}
+      ${editable && others.length ? `<form class="addlink rel3" id="linkForm"><select id="lTo" aria-label="Connect to">${others.map((o) => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select><select id="lRel" aria-label="Relationship type">${RELS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select><input id="lLabel" placeholder="Details, like owes money to (optional)" aria-label="Relationship details"><button type="submit">Add</button></form>` : ''}
     </div>
     ${editable ? `<div class="section"><div class="btnrow"><button type="button" class="danger" data-act="del-npc">Delete NPC</button></div></div>` : ''}`;
 }
@@ -1959,31 +1987,58 @@ function rosterHTML() {
   return `<div class="search"><input id="npcSearch" type="search" placeholder="Search names, roles, factions, notes" value="${esc(npcQuery)}" aria-label="Search NPCs">${editable ? '<button type="button" class="primary" data-act="new-npc">New</button>' : ''}</div>
     ${list.length ? `<ul class="list" id="roster">${list.map((n) => npcItem(n)).join('')}</ul>` : `<p class="muted">${all.length ? 'No NPCs match that search.' : 'No NPCs yet. Add one here, or use + NPC to drop one straight onto a map.'}</p>`}`;
 }
+function relLegend(rels) {
+  return `<div class="legend">${RELS.filter(([v]) => !rels || rels.has(v)).map(([v, l]) => `<span><i class="ln r-${v}"></i>${l}</span>`).join('')}</div>`;
+}
 function webHTML() {
   const ns = [...D.npcs.values()].sort((a, b) => a.name.localeCompare(b.name));
-  if (ns.length < 2) return '<p class="muted">Add at least two NPCs and connect them from an NPC’s details to see the web of relationships.</p>';
-  const S = 340, cx = S / 2, cy = S / 2, R = S / 2 - 46;
-  const pos = new Map(ns.map((n, i) => { const a = -Math.PI / 2 + (i / ns.length) * Math.PI * 2; return [n.id, { x: cx + R * Math.cos(a), y: cy + R * Math.sin(a), a }]; }));
-  const focus = sel && sel.kind === 'npc' ? sel.id : null;
-  const edges = [];
-  ns.forEach((n) => (n.links || []).forEach((l) => { if (pos.has(l.to)) edges.push({ a: n.id, b: l.to, label: l.label }); }));
-  const eh = edges.map((e) => {
-    const p = pos.get(e.a), q = pos.get(e.b), hot = focus && (e.a === focus || e.b === focus);
-    const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2;
-    return `<line class="edge${hot ? ' hot' : ''}" x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}"/>` +
-      (e.label && (!focus || hot) ? `<text class="elab${hot ? ' hot' : ''}" x="${mx}" y="${my}" text-anchor="middle" dominant-baseline="middle">${esc(e.label.length > 22 ? e.label.slice(0, 21) + '…' : e.label)}</text>` : '');
+  if (!ns.length) return '<p class="muted">Add NPCs and connect them from an NPC’s details to see who knows whom.</p>';
+  const n = webFocus && D.npcs.get(webFocus);
+  if (!n) {
+    webFocus = null;
+    const rows = ns.map((o) => {
+      const ls = linksOf(o);
+      const dots = RELS.map(([v]) => ls.filter((l) => l.rel === v).length ? `<i class="r-${v}" title="${relName(v)}"></i>` : '').join('');
+      return `<li><button type="button" class="item" data-act="web-npc" data-id="${o.id}"><span class="face att-${esc(o.attitude)}">${esc(initials(o.name))}</span>
+        <span><span class="t">${esc(o.name)}</span><span class="s">${ls.length ? `${ls.length} connection${ls.length === 1 ? '' : 's'}` : 'No connections'}</span></span><span class="relcount">${dots}</span></button></li>`;
+    }).join('');
+    return `<p class="muted">Choose an NPC to see who they’re connected to.</p><ul class="list">${rows}</ul>`;
+  }
+  const links = linksOf(n);
+  const head = `<div class="webhead"><button type="button" data-act="web-list">← All NPCs</button><button type="button" data-sel="npc" data-id="${n.id}">Open ${esc(n.name.length > 18 ? n.name.slice(0, 17) + '…' : n.name)}</button></div>`;
+  if (!links.length) return `${head}<h3>${esc(n.name)}</h3><p class="muted">${esc(n.name)} has no connections yet.${editable ? ' Add them from their details.' : ''}</p>`;
+  // The chosen NPC sits in the middle; everyone they're connected to sits around them.
+  const others = [...new Map(links.map((l) => [l.other.id, l.other])).values()].sort((a, b) => a.name.localeCompare(b.name));
+  const S = 340, cx = S / 2, cy = S / 2, R = S / 2 - 62;
+  const pos = new Map(others.map((o, i) => { const a = -Math.PI / 2 + (i / others.length) * Math.PI * 2; return [o.id, { x: cx + R * Math.cos(a), y: cy + R * Math.sin(a), a }]; }));
+  const seen = new Map();
+  const eh = links.map((l) => {
+    const q = pos.get(l.other.id), k = seen.get(l.other.id) || 0; seen.set(l.other.id, k + 1);
+    // A second link between the same pair bends to one side so both stay visible.
+    const bend = k ? 64 : 0, dx = q.x - cx, dy = q.y - cy, len = Math.hypot(dx, dy) || 1;
+    const mx = (cx + q.x) / 2 - (dy / len) * bend, my = (cy + q.y) / 2 + (dx / len) * bend;
+    const text = l.label || relName(l.rel);
+    // Label sits on the line, halfway along (the midpoint of a quadratic curve is half its bend out).
+    const lx = (cx + q.x) / 2 - (dy / len) * bend / 2, ly = (cy + q.y) / 2 + (dx / len) * bend / 2;
+    return `<path class="edge r-${l.rel}" d="M${cx} ${cy} Q${mx} ${my} ${q.x} ${q.y}"><title>${esc(l.rev ? `${l.other.name} → ${n.name}` : `${n.name} → ${l.other.name}`)}: ${esc(relName(l.rel))}${l.label ? ' · ' + esc(l.label) : ''}</title></path>` +
+      `<text class="elab" x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle">${esc(text.length > 20 ? text.slice(0, 19) + '…' : text)}</text>`;
   }).join('');
-  const nh = ns.map((n) => {
-    const p = pos.get(n.id); const out = Math.cos(p.a), below = Math.sin(p.a);
+  const nh = others.map((o) => {
+    const p = pos.get(o.id), out = Math.cos(p.a), below = Math.sin(p.a);
     const anchor = Math.abs(out) < .3 ? 'middle' : out > 0 ? 'start' : 'end';
     const lx = p.x + out * 22, ly = p.y + below * 22 + (Math.abs(out) < .3 ? (below > 0 ? 8 : -2) : 4);
-    return `<g class="node att-${esc(n.attitude)}${focus === n.id ? ' sel' : ''}" data-sel="npc" data-id="${n.id}" tabindex="0" role="button" aria-label="${esc(n.name)}">
-      <circle cx="${p.x}" cy="${p.y}" r="15"/><text class="ini" x="${p.x}" y="${p.y}" text-anchor="middle" dominant-baseline="central">${esc(initials(n.name))}</text>
-      <text class="gname" x="${lx}" y="${ly}" text-anchor="${anchor}">${esc(n.name.length > 18 ? n.name.slice(0, 17) + '…' : n.name)}</text></g>`;
+    return `<g class="node att-${esc(o.attitude)}" data-web="${o.id}" tabindex="0" role="button" aria-label="Show ${esc(o.name)}’s connections">
+      <circle cx="${p.x}" cy="${p.y}" r="15"/><text class="ini" x="${p.x}" y="${p.y}" text-anchor="middle" dominant-baseline="central">${esc(initials(o.name))}</text>
+      <text class="gname" x="${lx}" y="${ly}" text-anchor="${anchor}">${esc(o.name.length > 16 ? o.name.slice(0, 15) + '…' : o.name)}</text></g>`;
   }).join('');
-  return `<svg class="graph" viewBox="0 0 ${S} ${S}" role="img" aria-label="NPC relationship web">${eh}${nh}</svg>
-    <div class="legend"><span><i class="f"></i>Friendly</span><span><i></i>Neutral</span><span><i class="h"></i>Hostile</span><span><i class="u"></i>Unknown</span></div>
-    <p class="muted">${edges.length} connection${edges.length === 1 ? '' : 's'} between ${ns.length} NPCs. Select someone to highlight their ties.</p>`;
+  const center = `<g class="node focus att-${esc(n.attitude)}" data-sel="npc" data-id="${n.id}" tabindex="0" role="button" aria-label="Open ${esc(n.name)}">
+    <circle cx="${cx}" cy="${cy}" r="22"/><text class="ini" x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central">${esc(initials(n.name))}</text>
+    <text class="gname" x="${cx}" y="${cy + 36}" text-anchor="middle">${esc(n.name.length > 22 ? n.name.slice(0, 21) + '…' : n.name)}</text></g>`;
+  return `${head}
+    <svg class="graph" viewBox="0 0 ${S} ${S}" role="img" aria-label="${esc(n.name)}’s connections">${eh}${nh}${center}</svg>
+    ${relLegend(new Set(links.map((l) => l.rel)))}
+    <p class="muted">Line colours show how they feel about each other; circle colours show their attitude to the party. Select someone around ${esc(n.name)} to see their connections.</p>
+    <div class="links">${links.map(linkRowHTML).join('')}</div>`;
 }
 let paneDirty = false;
 function renderPane(force) {
@@ -1999,10 +2054,15 @@ function renderPane(force) {
 $('#pane').addEventListener('focusout', (e) => { if (paneDirty && !$('#pane').contains(e.relatedTarget)) setTimeout(() => renderPane(), 0); });
 function render(force) { renderHeader(); renderMap(); renderPane(force); }
 
-document.querySelector('.tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) { tab = b.dataset.tab; renderPane(true); } });
+document.querySelector('.tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) { tab = b.dataset.tab; if (tab === 'web') webFocus = sel && sel.kind === 'npc' ? sel.id : null; renderPane(true); } });
 
 /* ---------- Rail events ---------- */
 $('#pane').addEventListener('change', async (e) => {
+  if (e.target.dataset.relOwner && editable) {
+    const o = D.npcs.get(e.target.dataset.relOwner); if (!o) return;
+    const links = (o.links || []).map((l) => (l.to === e.target.dataset.relTo ? { ...l, rel: e.target.value } : l));
+    D.npcs.set(o.id, { ...o, links }); renderPane(true); patch('npcs', o.id, { links }); return;
+  }
   if (e.target.dataset.vis && editable) { setHidden(e.target.dataset.vis, e.target.dataset.id, !e.target.checked); return; }
   const f = e.target.dataset.f; if (!f) return;
   if (!editable && !(f.startsWith('token:') && canMoveTok(D.tokens.get(sel && sel.id)))) return;
@@ -2068,9 +2128,9 @@ $('#pane').addEventListener('submit', async (e) => {
     await done; return;
   }
   if (e.target.id !== 'linkForm') return; e.preventDefault();
-  const n = D.npcs.get(sel && sel.id); const to = $('#lTo').value; const label = $('#lLabel').value.trim() || 'knows';
+  const n = D.npcs.get(sel && sel.id); const to = $('#lTo').value; const label = $('#lLabel').value.trim(); const rel = $('#lRel').value;
   if (!n || !to) return;
-  const links = (n.links || []).filter((l) => l.to !== to).concat([{ to, label }]);
+  const links = (n.links || []).filter((l) => l.to !== to).concat([{ to, label, rel }]);
   D.npcs.set(n.id, { ...n, links }); renderPane(true);
   await patch('npcs', n.id, { links });
 });
@@ -2079,10 +2139,14 @@ $('#pane').addEventListener('click', (e) => {
   if (s) { select(s.dataset.sel, s.dataset.id); return; }
   const mp = e.target.closest('[data-map]');
   if (mp) { openMap(mp.dataset.map); return; }
+  const w = e.target.closest('[data-web]');
+  if (w) { webFocus = w.dataset.web; renderPane(true); return; }
   const b = e.target.closest('[data-act]'); if (!b) return;
   const act = b.dataset.act;
   const cur = sel && (sel.kind === 'place' ? D.places.get(sel.id) : sel.kind === 'token' ? D.tokens.get(sel.id) : D.npcs.get(sel.id));
   if (act === 'back') { sel = null; render(true); }
+  else if (act === 'web-npc') { webFocus = b.dataset.id; tab = 'web'; renderPane(true); $('#pane').scrollTop = 0; }
+  else if (act === 'web-list') { webFocus = null; renderPane(true); }
   else if (act === 'add-child' && cur) armUpload(cur.id);
   else if (act === 'npc-here' && cur) createNpc({ placeId: cur.id });
   else if (act === 'new-npc') createNpc({});
@@ -2156,8 +2220,11 @@ $('#pane').addEventListener('click', (e) => {
   else if (act === 'clear-ex') arm(b, 'cx', 'Click again to remove examples', clearExamples);
 });
 $('#pane').addEventListener('keydown', (e) => {
-  const g = e.target.closest && e.target.closest('g[data-sel]');
-  if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); select('npc', g.dataset.id); }
+  const g = e.target.closest && e.target.closest('g[data-sel], g[data-web]');
+  if (!g || (e.key !== 'Enter' && e.key !== ' ')) return;
+  e.preventDefault();
+  if (g.dataset.web) { webFocus = g.dataset.web; renderPane(true); const f = $('#pane .node.focus'); if (f) f.focus(); }
+  else select('npc', g.dataset.id);
 });
 
 /* ---------- Boot ---------- */
