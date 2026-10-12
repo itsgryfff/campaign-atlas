@@ -427,6 +427,11 @@ function snapTok(m, p, size) {
   const f = (v, o) => (size % 2 ? (Math.floor((v - o) / g.cell) + .5) * g.cell : Math.round((v - o) / g.cell) * g.cell) + o;
   return { x: clamp(f(p.x * w, g.ox) / w, 0, 1), y: clamp(f(p.y * h, g.oy) / h, 0, 1) };
 }
+// A token linked to an NPC shows the NPC's name unless the token has its own name.
+// Players only see the link when the NPC itself is visible to them.
+const tokNpc = (t) => (t && t.npcId ? D.npcs.get(t.npcId) : null);
+const tokLabel = (t) => t.name || (tokNpc(t) ? tokNpc(t).name : t.npcId ? 'Unknown' : 'Token');
+const ATT_COLOR = { friendly: '#2f855a', hostile: '#c0392b', neutral: '#4a5568', unknown: '#b7791f' };
 const canMoveTok = (t) => !!t && (editable || (!!myId && t.owner === myId && !isDM));
 const childMaps = (placeId) => mapsList().filter((m) => m.placeId === placeId);
 function mapPath(mapId) {
@@ -558,6 +563,7 @@ function endPointer(e) {
   else if (mode === 'token') createToken(p, {});
   else if (mode === 'mytoken') createToken(p, { owner: myId, name: myName || 'My token', kind: 'pc', color: '#2b6cb0' });
   else if (mode === 'pin-npc' && pinningNpc) pinNpc(pinningNpc, p);
+  else if (mode === 'tok-npc' && pinningNpc) { const n = D.npcs.get(pinningNpc); createToken(p, { npcId: pinningNpc, name: '', color: ATT_COLOR[n && n.attitude] || '#4a5568' }); }
   else if (sel) { sel = null; render(); }
 }
 vp.addEventListener('pointerup', endPointer);
@@ -575,7 +581,7 @@ function activatePin(kind, id) {
 
 /* ---------- Modes ---------- */
 function setMode(m, npcId) {
-  mode = m; pinningNpc = m === 'pin-npc' ? npcId : null;
+  mode = m; pinningNpc = m === 'pin-npc' || m === 'tok-npc' ? npcId : null;
   document.querySelectorAll('#modes button, #mySeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
   vp.classList.toggle('adding', m !== 'move');
   const hint = $('#hint');
@@ -585,6 +591,7 @@ function setMode(m, npcId) {
     token: 'Click the map to place a token. Press Esc to stop.',
     mytoken: 'Click the map to place your token. Press Esc to cancel.',
     'pin-npc': `Click the map to put ${esc(D.npcs.get(npcId)?.name || 'this NPC')} here. Esc to cancel.`,
+    'tok-npc': `Click the map to place a token for ${esc(D.npcs.get(npcId)?.name || 'this NPC')}. Esc to cancel.`,
   };
   hint.hidden = !msgs[m]; hint.innerHTML = msgs[m] || '';
 }
@@ -619,7 +626,7 @@ async function createToken(p, extra) {
   const rec = { mapId: curMap, x: s.x, y: s.y, name: 'Token', kind: 'monster', color: '#c0392b', size: 1, owner: null, created: Date.now(), ...extra };
   D.tokens.set(id, { id, ...rec }); select('token', id, true); setMode('move');
   await put('tokens', id, rec);
-  focusName();
+  if (!rec.npcId) focusName();
 }
 function focusName() { setTimeout(() => { const n = $('#fName'); if (n) { n.focus(); n.select(); } }, 30); }
 async function pinNpc(id, p) {
@@ -806,6 +813,10 @@ async function deleteNpc(id) {
       const links = o.links.filter((l) => l.to !== id); D.npcs.set(o.id, { ...o, links }); await patch('npcs', o.id, { links });
     }
   }
+  for (const t of [...ALL.tokens.values()].filter((t) => t.npcId === id)) {
+    const fix = { npcId: null, name: t.name || n.name };
+    D.tokens.set(t.id, { ...t, ...fix }); await patch('tokens', t.id, fix);
+  }
   D.npcs.delete(id); sel = null; render();
   const sf = (SH.get(id) || {}).sheetFile; SH.delete(id);
   try { await db.collection('dm/sheets/npcs').doc(id).delete(); if (sf && assets) await assets.delete(sf.id); } catch (e) {}
@@ -858,8 +869,8 @@ function pinsHTML() {
   const toks = isBattle(m) ? tokensOn(curMap).map((t) => {
     const g = gridOf(m), d = g.cell * (t.size || 1) * .9;
     const isSel = sel && sel.kind === 'token' && sel.id === t.id;
-    return `<button type="button" class="pin tok${isSel ? ' sel' : ''}${t._h ? ' hid' : ''}${canMoveTok(t) ? ' movable' : ''}" data-kind="token" data-id="${t.id}" style="left:${t.x * 100}%;top:${t.y * 100}%;width:${d}px;height:${d}px;font-size:${Math.max(6, g.cell * .3)}px;--tc:${tokColor(t.color)}" aria-label="Token: ${esc(t.name)}">
-      <span class="disc">${esc(initials(t.name))}</span><span class="nm">${esc(t.name)}</span></button>`;
+    return `<button type="button" class="pin tok${isSel ? ' sel' : ''}${t._h ? ' hid' : ''}${canMoveTok(t) ? ' movable' : ''}" data-kind="token" data-id="${t.id}" style="left:${t.x * 100}%;top:${t.y * 100}%;width:${d}px;height:${d}px;font-size:${Math.max(6, g.cell * .3)}px;--tc:${tokColor(t.color)}" aria-label="Token: ${esc(tokLabel(t))}">
+      <span class="disc">${esc(initials(tokLabel(t)))}</span><span class="nm">${esc(tokLabel(t))}</span></button>`;
   }) : [];
   return places.join('') + npcs.join('') + toks.join('');
 }
@@ -1028,11 +1039,21 @@ function battleHTML(m) {
     </div>
     <p class="muted">Count the squares along the top edge of your map so tokens snap into them. Use <b>+ Token</b> above the map for monsters and NPCs.</p>` : ''}`;
 }
+// A compact NPC summary shown on a linked token. DMs also get AC and HP from the sheet.
+function npcCard(n) {
+  const sh = (SH.get(n.id) || {}).sheet || {};
+  const stats = showSheets() && (sh.ac || sh.hp) ? `<span class="s">${[sh.ac && 'AC ' + sh.ac, sh.hp && 'HP ' + sh.hp].filter(Boolean).map(esc).join(' \u00b7 ')}</span>` : '';
+  return `<button type="button" class="item" data-sel="npc" data-id="${esc(n.id)}" style="border:1px solid var(--line)">
+    <span class="face att-${esc(n.attitude)}">${esc(initials(n.name))}</span>
+    <span><span class="t">${esc(n.name)}</span><span class="s">${esc(n.role || attName(n.attitude))}</span>${stats}</span><span class="chip">Open NPC</span></button>`;
+}
 function tokenHTML(t) {
-  const can = canMoveTok(t), d = can ? '' : ' disabled';
+  const can = canMoveTok(t), d = can ? '' : ' disabled', npc = tokNpc(t);
   const owner = MEMBERS.find((x) => x.id === t.owner);
   return `<div class="kicker"><button type="button" class="link" data-act="back">← ${esc(D.maps.get(t.mapId)?.name || 'Map')}</button><span class="lbl">Token</span></div>
-    <div class="field"><label class="lbl" for="fName">Name</label><input id="fName" value="${esc(t.name)}" maxlength="40" data-f="token:name"${d}></div>
+    <div class="field"><label class="lbl" for="fName">Name</label><input id="fName" value="${esc(t.name)}" maxlength="40" placeholder="${esc(npc ? npc.name + ' (from the NPC)' : '')}" data-f="token:name"${d}></div>
+    ${editable ? `<div class="field"><label class="lbl" for="tNpc">Linked NPC</label><select id="tNpc" data-f="token:npcId"><option value="">None</option>${[...D.npcs.values()].sort((a, b) => a.name.localeCompare(b.name)).map((n) => `<option value="${esc(n.id)}"${t.npcId === n.id ? ' selected' : ''}>${esc(n.name)}</option>`).join('')}</select></div>` : ''}
+    ${npc ? npcCard(npc) : ''}
     <div class="field"><span class="lbl">Colour</span><div class="swatches">${TOKEN_COLORS.map((c) => `<button type="button" class="sw${tokColor(t.color) === c ? ' on' : ''}" style="--sw:${c}" data-act="tok-color" data-color="${c}" aria-label="Colour ${c}"${d}></button>`).join('')}</div></div>
     ${editable ? `<div class="row2">
         <div class="field"><label class="lbl" for="tSize">Size</label><select id="tSize" data-f="token:size">${TOKEN_SIZES.map(([v, l]) => `<option value="${v}"${(t.size || 1) === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
@@ -1041,6 +1062,15 @@ function tokenHTML(t) {
       ${visRow('tokens', t)}`
     : `<p class="muted">${owner ? `Moved by ${esc(owner.username)}.` : 'Moved by the DM.'}${can ? ' Drag it on the map to move it.' : ''}</p>`}
     ${editable || (can && t.createdBy === myId) ? '<div class="section"><div class="btnrow"><button type="button" class="danger" data-act="del-token">Remove token</button></div></div>' : ''}`;
+}
+function tokensSection(n) {
+  const toks = [...D.tokens.values()].filter((t) => t.npcId === n.id);
+  const here = D.maps.get(curMap);
+  if (!toks.length && !(editable && isBattle(here))) return '';
+  return `<div class="section"><h3>Tokens (${toks.length})</h3>
+    ${toks.length ? `<ul class="list">${toks.map((t) => `<li><button type="button" class="item" data-sel="token" data-id="${esc(t.id)}"><span class="dot" style="background:${tokColor(t.color)}"></span><span><span class="t">${esc(tokLabel(t))}</span><span class="s">on ${esc(D.maps.get(t.mapId)?.name || 'a map')}</span></span><span></span></button></li>`).join('')}</ul>` : ''}
+    ${editable && isBattle(here) ? `<div class="btnrow"><button type="button" data-act="tok-npc">Place token on ${esc(here.name)}</button></div>` : ''}
+  </div>`;
 }
 function npcHTML(n) {
   const links = linksOf(n);
@@ -1065,6 +1095,7 @@ function npcHTML(n) {
       ${onMap ? `<p class="muted">Pinned on <button type="button" class="link" data-act="goto-npc">${esc(onMap.name)}</button></p>` : '<p class="muted">Not pinned on any map.</p>'}
       ${editable && curMap ? `<div class="btnrow"><button type="button" data-act="pin-npc">${onMap ? 'Move pin to this map' : 'Pin on this map'}</button>${onMap ? '<button type="button" data-act="unpin-npc">Remove pin</button>' : ''}</div>` : ''}
     </div>
+    ${tokensSection(n)}
     <div class="section"><h3>Connections (${links.length})</h3>
       ${links.length ? `<div class="links">${links.map((l) => `<div class="link-row"><div class="who"><button type="button" class="link" data-sel="npc" data-id="${l.other.id}">${esc(l.other.name)}</button> <span class="lab">${esc(l.label || 'knows')}</span></div>${editable ? `<button type="button" class="x" data-act="unlink" data-owner="${l.owner}" data-to="${l.to}" aria-label="Remove connection with ${esc(l.other.name)}">×</button>` : ''}</div>`).join('')}</div>` : '<p class="muted">No connections yet.</p>'}
       ${editable && others.length ? `<form class="addlink" id="linkForm"><select id="lTo" aria-label="Connect to">${others.map((o) => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select><input id="lLabel" placeholder="owes money to" aria-label="Relationship"><button type="submit">Add</button></form>` : ''}
@@ -1146,14 +1177,21 @@ $('#pane').addEventListener('change', async (e) => {
   const id = kind === 'map' ? curMap : sel && sel.id;
   const rec = D[col].get(id); if (!rec) return;
   let v = e.target.value;
-  if (field === 'name') { v = v.trim() || rec.name; e.target.value = v; }
-  if (field === 'placeId' || field === 'owner') v = v || null;
+  if (field === 'name') { v = v.trim(); if (!v && !(kind === 'token' && rec.npcId)) v = rec.name; e.target.value = v; }
+  if (field === 'placeId' || field === 'owner' || field === 'npcId') v = v || null;
   if (e.target.type === 'checkbox') v = e.target.checked;
   if (field === 'gridN') v = clamp(parseInt(v, 10) || 20, 2, 200);
   if (field === 'gridOX' || field === 'gridOY') v = Number(v) || 0;
   if (field === 'gridShow') v = v === '1';
   if (field === 'size') v = clamp(parseInt(v, 10) || 1, 1, 4);
   if (rec[field] === v) return;
+  // Linking a token to an NPC takes the NPC's name and attitude colour.
+  if (kind === 'token' && field === 'npcId' && v) {
+    const n = D.npcs.get(v), extra = { npcId: v, name: '', color: ATT_COLOR[n && n.attitude] || rec.color };
+    D.tokens.set(id, { ...rec, ...extra }); renderMap(); renderPane(true);
+    await patch('tokens', id, extra);
+    return;
+  }
   D[col].set(id, { ...rec, [field]: v });
   renderHeader(); renderMap();
   if (e.target.tagName === 'SELECT' || e.target.type === 'checkbox') renderPane(true);
@@ -1190,6 +1228,7 @@ $('#pane').addEventListener('click', (e) => {
   else if (act === 'npc-here' && cur) createNpc({ placeId: cur.id });
   else if (act === 'new-npc') createNpc({});
   else if (act === 'pin-npc' && cur) setMode('pin-npc', cur.id);
+  else if (act === 'tok-npc' && cur) setMode('tok-npc', cur.id);
   else if (act === 'unpin-npc' && cur) { D.npcs.set(cur.id, { ...cur, mapId: null, x: null, y: null }); render(true); patch('npcs', cur.id, { mapId: null, x: null, y: null }); }
   else if (act === 'goto-npc' && cur) { if (cur.mapId !== curMap) openMap(cur.mapId, true); centerOn(cur.x, cur.y); }
   else if (act === 'unlink') {
