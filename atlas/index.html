@@ -281,6 +281,30 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
   .atk { grid-template-columns: 1fr 1fr 1fr; padding: 8px; border: 1px solid var(--line); border-radius: 8px; }
   .atk > :first-child { grid-column: 1 / -1; }
 }
+.cs-spells { display: grid; gap: 10px; }
+.sp-top { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+.sp-top .cs-box { min-width: 96px; }
+.sp-top select { width: auto; }
+.conc { border: 1px solid var(--brass); background: var(--tint); color: var(--ink); border-radius: 999px; padding: 4px 10px; font-size: .85rem; font-weight: 600; display: inline-flex; gap: 6px; align-items: center; }
+.slots { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 6px; }
+.slot { border: 1px solid var(--line); border-radius: 8px; padding: 4px; display: grid; gap: 3px; justify-items: center; background: var(--hover); }
+.slot .lv { font-size: .7rem; font-weight: 700; color: var(--muted); }
+.slot input { width: 3.2em; text-align: center; padding: .15rem; font-family: var(--mono); }
+.slot .pips { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; min-height: 14px; }
+.pip2 { width: 13px; height: 13px; padding: 0; border-radius: 50%; border: 2px solid var(--accent); background: var(--accent); }
+.pip2.used { background: transparent; border-color: var(--line); }
+.spl { display: grid; grid-template-columns: minmax(120px, 1.5fr) 92px 34px minmax(128px, 1.1fr) 84px 108px 72px 34px 58px auto 28px; gap: 6px; align-items: center; }
+.spl.head { font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; }
+.spl select, .spl input { padding: .35rem .4rem; }
+.spl .ft { display: flex; align-items: center; gap: 4px; }
+.spl .ft input { font-family: var(--mono); }
+.spl .ft span { color: var(--muted); font-size: .78rem; }
+@media (max-width: 860px) {
+  .slots { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .spl.head { display: none; }
+  .spl { grid-template-columns: 1fr 1fr 1fr; padding: 8px; border: 1px solid var(--line); border-radius: 8px; }
+  .spl > :first-child { grid-column: 1 / -1; }
+}
 .rangelayer { position: absolute; inset: 0; pointer-events: none; }
 .rangering { position: absolute; border-radius: 50%; transform: translate(-50%, -50%); border: calc(2.5px * var(--inv)) solid var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .rangering.long { border-style: dashed; border-color: var(--brass); background: color-mix(in srgb, var(--brass) 6%, transparent); }
@@ -975,6 +999,7 @@ function renderSheet() {
         <span class="dsg">Failures ${[0, 1, 2].map((i) => `<input type="checkbox" data-ds="f" data-i="${i}" aria-label="Failure ${i + 1}"${(ds.f || 0) > i ? ' checked' : ''}${d}>`).join('')}</span>
       </div>
       ${attacksHTML(c, ed)}
+      ${spellsHTML(c, ed)}
       <div class="cs-main">
         <div class="cs-abil"><span class="lbl">Abilities · check · save</span>
           ${ABILS.map(([a, l]) => `<div class="cs-ab"><span class="nm" title="${l}">${a.toUpperCase()}</span>
@@ -987,7 +1012,7 @@ function renderSheet() {
         </div>
         <div class="cs-text">
           ${ta('attacks', 'Other attack notes', 'Extra attack, Sneak Attack dice, special rules')}
-          ${ta('spells', 'Spells', 'Cantrips, prepared spells, slots')}
+          ${ta('spells', 'Spell notes', 'Spellbook, components, anything else')}
           ${ta('features', 'Features and traits', 'Second Wind, Darkvision…')}
           ${ta('equipment', 'Equipment and money', 'Chain mail, shield, 15 gp')}
           ${ta('notes', 'Notes', 'Backstory, bonds, goals')}
@@ -1005,6 +1030,7 @@ function updateDerived() {
   ABILS.forEach(([a]) => { set('mod.' + a, f(csMod(c, a))); set('save.' + a, f(csSave(c, a))); });
   SKILLS.forEach(([k, , a]) => set('skill.' + k, f(csSkill(c, k, a))));
   const t = $('#csTitle'); if (t) t.textContent = c.name || 'New character';
+  set('spdc', spDC(c)); set('spatk', f(spAtk(c)));
   updateAttackNumbers();
 }
 function updateAttackNumbers() {
@@ -1112,12 +1138,84 @@ function showRange(a) {
   rangeTimer = setTimeout(clearRange, 20000);
 }
 
+/* ---------- Spells ---------- */
+const SPELL_LEVELS = ['Cantrip', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th'];
+const SPELL_EFFECTS = [['none', 'Utility'], ['attack', 'Spell attack'], ['save:str', 'STR save'], ['save:dex', 'DEX save'], ['save:con', 'CON save'], ['save:int', 'INT save'], ['save:wis', 'WIS save'], ['save:cha', 'CHA save'], ['heal', 'Healing']];
+const spMod = (c) => csMod(c, c.spellAbility || 'int');
+const spDC = (c) => 8 + csPB(c) + spMod(c);
+const spAtk = (c) => csPB(c) + spMod(c);
+function spellsHTML(c, ed) {
+  const d = ed ? '' : ' disabled', list = [...(c.splist || [])].sort((a, b) => (a.level || 0) - (b.level || 0) || String(a.name).localeCompare(String(b.name)));
+  const slots = c.slots || {};
+  const slotBox = (L) => {
+    const sl = slots[L] || {}, max = parseInt(sl.max, 10) || 0, used = clamp(parseInt(sl.used, 10) || 0, 0, max);
+    return `<div class="slot"><span class="lv">${SPELL_LEVELS[L]}</span><input type="number" min="0" max="9" value="${max || ''}" placeholder="0" data-slot="${L}" aria-label="${SPELL_LEVELS[L]} level slots"${d}>
+      <span class="pips">${Array.from({ length: max }, (_, i) => `<button type="button" class="pip2${i < used ? ' used' : ''}" data-pip="${L}" data-i="${i}" aria-label="${SPELL_LEVELS[L]} slot ${i + 1}${i < used ? ', used' : ''}"${d}></button>`).join('')}</span></div>`;
+  };
+  const row = (sp) => `<div class="spl" data-sp="${esc(sp.id)}">
+      <input value="${esc(sp.name || '')}" placeholder="Fire Bolt" data-k="name" aria-label="Spell name"${d}>
+      <select data-k="level" aria-label="Spell level"${d}>${SPELL_LEVELS.map((l, i) => `<option value="${i}"${(sp.level || 0) === i ? ' selected' : ''}>${l}</option>`).join('')}</select>
+      <button type="button" class="pf p${sp.prep !== false ? 1 : 0}" data-sp-act="prep" title="Prepared" aria-label="Prepared"${d}>${sp.prep !== false ? '●' : ''}</button>
+      <select data-k="effect" aria-label="Effect"${d}>${SPELL_EFFECTS.map(([v, l]) => `<option value="${v}"${(sp.effect || 'none') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
+      <input value="${esc(sp.dice || '')}" placeholder="1d10" data-k="dice" aria-label="Dice"${d}>
+      <select data-k="type" aria-label="Damage type"${d}><option value="">—</option>${DMG_TYPES.map((t) => `<option${sp.type === t ? ' selected' : ''}>${t}</option>`).join('')}</select>
+      <span class="ft"><input type="number" min="0" step="5" value="${esc(sp.range ?? '')}" placeholder="0" data-k="range" aria-label="Range in feet (0 for self or touch)"${d}><span>ft</span></span>
+      <button type="button" class="pf p${sp.conc ? 2 : 0}" data-sp-act="conc" title="Concentration" aria-label="Concentration"${d}>${sp.conc ? 'C' : ''}</button>
+      <button type="button" class="primary" data-sp-act="cast"${d}>Cast</button>
+      <button type="button" data-sp-act="range" title="Show range on the battle map">Range</button>
+      ${ed ? '<button type="button" class="x" data-sp-act="del" aria-label="Delete spell">×</button>' : '<span></span>'}
+    </div>`;
+  return `<div class="cs-spells"><div class="section-head"><span class="lbl">Spellcasting</span>${ed ? '<button type="button" data-sp-act="add">+ Add spell</button>' : ''}</div>
+    <div class="sp-top">
+      <div class="field"><label class="lbl" for="cs-spAb">Ability</label><select id="cs-spAb" data-c="spellAbility"${d}>${[['int', 'Intelligence'], ['wis', 'Wisdom'], ['cha', 'Charisma']].map(([v, l]) => `<option value="${v}"${(c.spellAbility || 'int') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="cs-box"><span class="lbl">Save DC</span><span class="big" data-out="spdc"></span></div>
+      <div class="cs-box"><span class="lbl">Spell attack</span><button type="button" class="roll" data-roll-cs="spellatk" data-out="spatk"></button></div>
+      ${c.concOn ? `<span class="conc">Concentrating on ${esc(c.concOn)}${ed ? ' <button type="button" class="x" data-sp-act="endconc" aria-label="End concentration">×</button>' : ''}</span>` : ''}
+      ${ed ? '<button type="button" data-sp-act="rest" title="Refill all spell slots and end concentration">Long rest</button>' : ''}
+    </div>
+    <div class="slots">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(slotBox).join('')}</div>
+    ${list.length ? `<div class="spl head"><span>Spell</span><span>Level</span><span>Prep</span><span>Effect</span><span>Dice</span><span>Type</span><span>Range</span><span>Conc</span><span></span><span></span><span></span></div>${list.map(row).join('')}`
+      : '<p class="muted">No spells yet. Add them to cast from here: the right slot is used and the roll goes to the table.</p>'}
+  </div>`;
+}
+function castSpell(sp) {
+  const c = CH.get(csUid) || {}, who = c.name || memberName(csUid), name = sp.name || 'Spell';
+  const level = parseInt(sp.level, 10) || 0;
+  let castAt = 0, note = '';
+  if (level > 0) {
+    const slots = c.slots || {};
+    for (let L = level; L <= 9; L++) { const sl = slots[L] || {}; if ((parseInt(sl.used, 10) || 0) < (parseInt(sl.max, 10) || 0)) { castAt = L; break; } }
+    if (!castAt) { toast(`No spell slots left for ${name} (${SPELL_LEVELS[level]} level or higher).`, true); return; }
+    const sl = slots[castAt] || {};
+    saveSheet({ slots: { ...slots, [castAt]: { ...sl, used: (parseInt(sl.used, 10) || 0) + 1 } } });
+    if (castAt > level) note = ` at ${SPELL_LEVELS[castAt]} level`;
+  }
+  if (sp.conc) saveSheet({ concOn: name });
+  const eff = sp.effect || 'none';
+  if (eff === 'attack') {
+    const r = d20(), b = spAtk(c);
+    shareRoll({ uid: csUid, who, label: `${name}${note} to hit`, total: r + b, detail: `${r} ${b < 0 ? '−' : '+'} ${Math.abs(b)}`, nat: r === 20 ? 20 : r === 1 ? 1 : null });
+  }
+  const save = eff.startsWith('save:') ? `DC ${spDC(c)} ${eff.slice(5).toUpperCase()} save` : '';
+  if (sp.dice) {
+    const dice = rollDice(sp.dice);
+    if (!dice) toast('Write the spell’s dice like 1d10 or 8d6.', true);
+    else shareRoll({ uid: csUid, who, label: `${name}${eff === 'attack' ? '' : note} ${eff === 'heal' ? 'healing' : sp.type || 'damage'}`.slice(0, 40), total: Math.max(0, dice.total), detail: (save ? save + ' · ' : '') + dice.detail, nat: null });
+  } else if (save) {
+    shareRoll({ uid: csUid, who, label: `${name}${note}`, total: `DC ${spDC(c)}`, detail: save, nat: null });
+  } else if (eff !== 'attack') {
+    shareRoll({ uid: csUid, who, label: `Casts ${name}${note}`.slice(0, 40), total: '✨', detail: sp.conc ? 'concentration' : '', nat: null });
+  }
+  renderSheet();
+}
+
 function rollCs(key) {
   const c = CH.get(csUid) || {}, r = d20();
   let label, bonus;
   if (key === 'init') { label = 'Initiative'; bonus = csMod(c, 'dex'); }
   else if (key.startsWith('save.')) { const a = key.slice(5); label = ABILS.find((x) => x[0] === a)[1] + ' save'; bonus = csSave(c, a); }
   else if (key.startsWith('skill.')) { const sk = SKILLS.find((x) => x[0] === key.slice(6)); label = sk[1]; bonus = csSkill(c, sk[0], sk[2]); }
+  else if (key === 'spellatk') { label = 'Spell attack'; bonus = spAtk(c); }
   else { label = ABILS.find((x) => x[0] === key)[1] + ' check'; bonus = csMod(c, key); }
   const total = r + bonus, detail = `${r} ${bonus < 0 ? '\u2212' : '+'} ${Math.abs(bonus)}`, nat = r === 20 ? 20 : r === 1 ? 1 : null;
   const roll = { uid: csUid, who: c.name || memberName(csUid), label, total, detail, nat };
@@ -1127,6 +1225,21 @@ function rollCs(key) {
 }
 $('#csSheet').addEventListener('change', (e) => {
   const t = e.target, c = CH.get(csUid) || {};
+  if (t.dataset.slot) {
+    const L = t.dataset.slot, slots = c.slots || {}, max = clamp(parseInt(t.value, 10) || 0, 0, 9);
+    saveSheet({ slots: { ...slots, [L]: { max, used: Math.min(parseInt((slots[L] || {}).used, 10) || 0, max) } } }); renderSheet(); return;
+  }
+  const spRow = t.closest('[data-sp]');
+  if (spRow && t.dataset.k) {
+    const id = spRow.dataset.sp, k = t.dataset.k;
+    let v = t.value;
+    if (k === 'level') v = clamp(parseInt(v, 10) || 0, 0, 9);
+    if (k === 'range') v = v === '' ? '' : clamp(parseInt(v, 10) || 0, 0, 5000);
+    if (k === 'name') v = v.slice(0, 40);
+    saveSheet({ splist: (c.splist || []).map((x) => (x.id === id ? { ...x, [k]: v } : x)) });
+    if (k === 'level') renderSheet();
+    return;
+  }
   const atkRow = t.closest('[data-atk]');
   if (atkRow && t.dataset.k) {
     const id = atkRow.dataset.atk, k = t.dataset.k;
@@ -1165,6 +1278,33 @@ $('#csSheet').addEventListener('click', (e) => {
     try { await db.collection('characters').doc(uid).delete(); toast('Character sheet deleted.'); } catch (err) { writeErr(err); }
   });
   else if (b.dataset.rollCs) rollCs(b.dataset.rollCs);
+  else if (b.dataset.pip) {
+    const L = b.dataset.pip, i = +b.dataset.i, slots = c.slots || {}, sl = slots[L] || {}, used = parseInt(sl.used, 10) || 0;
+    saveSheet({ slots: { ...slots, [L]: { ...sl, used: used > i ? i : i + 1 } } }); renderSheet();
+  }
+  else if (b.dataset.spAct) {
+    const act = b.dataset.spAct, id = (b.closest('[data-sp]') || {}).dataset?.sp;
+    const list = c.splist || [], sp = list.find((x) => x.id === id);
+    if (act === 'add') {
+      saveSheet({ splist: [...list, { id: uid(), name: '', level: 0, prep: true, effect: 'attack', dice: '1d10', type: 'fire', range: 120, conc: false }] }); renderSheet();
+      setTimeout(() => { const ins = [...document.querySelectorAll('#csSheet .spl[data-sp] input[data-k="name"]')].find((x) => !x.value); if (ins) ins.focus(); }, 20);
+    }
+    else if (act === 'rest') {
+      const slots = Object.fromEntries(Object.entries(c.slots || {}).map(([L, sl]) => [L, { ...sl, used: 0 }]));
+      saveSheet({ slots, concOn: '' }); renderSheet(); toast('Long rest: spell slots refilled.');
+    }
+    else if (act === 'endconc') { saveSheet({ concOn: '' }); renderSheet(); }
+    else if (!sp) return;
+    else if (act === 'cast') castSpell(sp);
+    else if (act === 'range') {
+      const ft = parseInt(sp.range, 10) || 0;
+      if (ft <= 5) { toast(`${sp.name || 'This spell'} is ${ft ? '5 ft' : 'self or touch'} range.`); return; }
+      showRange({ name: sp.name || 'Spell', range: 'ranged', normal: ft, long: 0 });
+    }
+    else if (act === 'prep') { saveSheet({ splist: list.map((x) => (x.id === id ? { ...x, prep: x.prep === false } : x)) }); renderSheet(); }
+    else if (act === 'conc') { saveSheet({ splist: list.map((x) => (x.id === id ? { ...x, conc: !x.conc } : x)) }); renderSheet(); }
+    else if (act === 'del') { saveSheet({ splist: list.filter((x) => x.id !== id) }); renderSheet(); }
+  }
   else if (b.dataset.atkAct) {
     const act = b.dataset.atkAct, id = (b.closest('[data-atk]') || {}).dataset?.atk;
     const list = c.atks || [], a = list.find((x) => x.id === id);
@@ -1192,7 +1332,12 @@ function floatRoll(t, roll, age) {
   const r = isBattle(m) ? gridOf(m).cell * (t.size || 1) * .45 : 16;
   const el = document.createElement('div');
   el.className = 'rollfloat' + (roll.nat === 20 ? ' nat20' : roll.nat === 1 ? ' nat1' : '');
-  el.style.left = t.x * 100 + '%'; el.style.top = t.y * 100 + '%'; el.style.marginTop = -r + 'px';
+  // Rolls made together (an attack and its damage) stack instead of covering each other.
+  const now = Date.now() - age;
+  const stack = [...$('#floats').children].filter((x) => x.dataset.tok === t.id && Math.abs(Number(x.dataset.at) - now) < 2500).length;
+  el.dataset.tok = t.id; el.dataset.at = now;
+  el.style.left = t.x * 100 + '%'; el.style.top = t.y * 100 + '%';
+  el.style.marginTop = `calc(${-r}px - ${stack * 92}px * var(--inv))`;
   el.innerHTML = `<div class="rf" style="animation-delay:-${Math.round(age)}ms"><span class="who">${esc(roll.who || '')}</span><span class="what">${esc(roll.label || '')}</span><span class="tot">${esc(roll.total)}</span><span class="det">${esc(roll.detail || '')}${roll.nat === 20 ? ' · nat 20' : roll.nat === 1 ? ' · nat 1' : ''}</span></div>`;
   $('#floats').appendChild(el);
   setTimeout(() => el.remove(), ROLL_MS - age + 100);
