@@ -317,6 +317,7 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
 .aring .ai.spell { border-color: var(--brass); }
 .aring .ai.util { border-color: var(--line); min-width: 64px; }
 .aring .ai.lvl { border-color: var(--brass); min-width: 70px; }
+.aring .ai.dim { opacity: .55; }
 @keyframes ringIn { from { opacity: 0; transform: translate(-50%, -50%) scale(.6); } }
 @media (prefers-reduced-motion: reduce) { .aring .ai { animation: none; } }
 .rangelayer { position: absolute; inset: 0; pointer-events: none; }
@@ -1293,38 +1294,50 @@ function tokenSheetKey(t) {
 }
 let ringFor = null, ringItems = [];
 function closeRing() { ringFor = null; ringItems = []; const l = $('#ringLayer'); if (l) l.innerHTML = ''; }
-function openRing(tokId, levelsFor) {
+// view: undefined (attacks), 'spells', or { sp, levels } to pick a slot level.
+function openRing(tokId, view) {
   const t = D.tokens.get(tokId), key = tokenSheetKey(t);
   if (!t || !key || t.mapId !== curMap || !(canMoveTok(t) || isDM)) { closeRing(); return; }
   const c = CH.get(key) || {};
   ringFor = tokId;
-  if (levelsFor) {
-    ringItems = levelsFor.levels.map(([L, left]) => ({ kind: 'lvl', label: SPELL_LEVELS[L], sub: `${left} left`, act: () => { withSheet(key, () => castSpell(levelsFor.sp, L)); closeRing(); } }));
-    ringItems.push({ kind: 'util', label: 'Back', sub: '', act: () => openRing(tokId) });
+  const toSheet = { kind: 'util', label: 'Sheet', sub: '', act: () => { closeRing(); openSheet(key); } };
+  const spells = [...(c.splist || [])].filter((sp) => sp.prep !== false || !(parseInt(sp.level, 10) || 0))
+    .sort((a, b) => (a.level || 0) - (b.level || 0) || String(a.name).localeCompare(String(b.name)));
+  const atks = c.atks || [];
+  if (!view && !atks.length && spells.length) view = 'spells';   // spellcasters without weapons go straight to spells
+  const slotsLeft = (L) => { const sl = (c.slots || {})[L] || {}; return Math.max(0, (parseInt(sl.max, 10) || 0) - (parseInt(sl.used, 10) || 0)); };
+  let items;
+  if (view && view.sp) {
+    items = view.levels.map(([L, left]) => ({ kind: 'lvl', label: SPELL_LEVELS[L], sub: `${left} left`, act: () => { withSheet(key, () => castSpell(view.sp, L)); closeRing(); } }));
+    items.push({ kind: 'util', label: 'Back', sub: '', act: () => openRing(tokId, 'spells') });
+  } else if (view === 'spells') {
+    items = spells.map((sp) => {
+      const lv = parseInt(sp.level, 10) || 0, ft = parseInt(sp.range, 10) || 0;
+      const avail = lv ? castLevels(c, lv).reduce((n, [, left]) => n + left, 0) : null;
+      return { kind: 'spell', label: sp.name || 'Spell', sub: lv ? `${SPELL_LEVELS[lv]} · ${slotsLeft(lv)} left` : 'cantrip', range: ft > 5 ? [ft, 0] : null, dim: lv && !avail, act: () => {
+        if (lv) {
+          const levels = castLevels(CH.get(key) || {}, lv);
+          if (!levels.length) { toast(`No spell slots left for ${sp.name || 'that spell'}.`, true); return; }
+          if (levels.length > 1) { openRing(tokId, { sp, levels }); return; }
+        }
+        withSheet(key, () => castSpell(sp)); closeRing();
+      } };
+    });
+    if (items.length > 11) items = [...items.slice(0, 10), { kind: 'util', label: `${spells.length - 10} more…`, sub: 'open sheet', act: toSheet.act }];
+    if (!items.length) items.push({ kind: 'util', label: 'No spells yet', sub: 'add them on the sheet', act: toSheet.act });
+    if (atks.length) items.push({ kind: 'util', label: 'Back', sub: 'attacks', act: () => openRing(tokId) });
+    items.push(toSheet);
   } else {
-    const atks = (c.atks || []).map((a) => ({
+    items = atks.slice(0, spells.length ? 10 : 11).map((a) => ({
       kind: 'atk', label: a.name || 'Attack', sub: `${sgn(atkHit(c, a))} · ${a.dmg || '1d4'}`, range: atkRange(a),
       act: () => { withSheet(key, () => { rollAttack(a, 'hit'); rollAttack(a, 'dmg'); }); closeRing(); },
     }));
-    const spells = [...(c.splist || [])].filter((sp) => sp.prep !== false || !(parseInt(sp.level, 10) || 0))
-      .sort((a, b) => (a.level || 0) - (b.level || 0)).map((sp) => {
-        const lv = parseInt(sp.level, 10) || 0, ft = parseInt(sp.range, 10) || 0;
-        return { kind: 'spell', label: sp.name || 'Spell', sub: lv ? SPELL_LEVELS[lv] : 'cantrip', range: ft > 5 ? [ft, 0] : null, act: () => {
-          if (lv) {
-            const levels = castLevels(CH.get(key) || {}, lv);
-            if (!levels.length) { toast(`No spell slots left for ${sp.name || 'that spell'}.`, true); return; }
-            if (levels.length > 1) { openRing(tokId, { sp, levels }); return; }
-          }
-          withSheet(key, () => castSpell(sp)); closeRing();
-        } };
-      });
-    const all = [...atks, ...spells];
-    ringItems = all.slice(0, 11);
-    if (all.length > 11) ringItems.push({ kind: 'util', label: `${all.length - 11} more…`, sub: 'open sheet', act: () => { closeRing(); openSheet(key); } });
-    if (!all.length) ringItems.push({ kind: 'util', label: 'No attacks yet', sub: 'add them on the sheet', act: () => { closeRing(); openSheet(key); } });
-    ringItems.push({ kind: 'util', label: 'Sheet', sub: '', act: () => { closeRing(); openSheet(key); } });
+    if (spells.length) items.push({ kind: 'spell', label: 'Spells', sub: `${spells.length} ready`, act: () => openRing(tokId, 'spells') });
+    if (!atks.length && !spells.length) items.push({ kind: 'util', label: 'No attacks yet', sub: 'add them on the sheet', act: toSheet.act });
+    items.push(toSheet);
   }
-  $('#ringLayer').innerHTML = `<div class="aring" id="aring">${ringItems.map((it, i) => `<button type="button" class="ai${it.kind === 'atk' ? '' : ' ' + it.kind}" data-ri="${i}" style="animation-delay:${i * 25}ms"><span>${esc(it.label)}</span>${it.sub ? `<small>${esc(it.sub)}</small>` : ''}</button>`).join('')}</div>`;
+  ringItems = items;
+  $('#ringLayer').innerHTML = `<div class="aring" id="aring">${ringItems.map((it, i) => `<button type="button" class="ai${it.kind === 'atk' ? '' : ' ' + it.kind}${it.dim ? ' dim' : ''}" data-ri="${i}" style="animation-delay:${i * 25}ms"><span>${esc(it.label)}</span>${it.sub ? `<small>${esc(it.sub)}</small>` : ''}</button>`).join('')}</div>`;
   layoutRing();
 }
 // Positions the ring's buttons in a circle just outside the token, in screen pixels.
