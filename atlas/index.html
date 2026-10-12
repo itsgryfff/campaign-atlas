@@ -925,16 +925,28 @@ const csPB = (c) => Math.ceil(clamp(parseInt(c.level, 10) || 1, 1, 20) / 4) + 1;
 const csSave = (c, a) => csMod(c, a) + ((c.saves || {})[a] ? csPB(c) : 0);
 const csSkill = (c, k, a) => csMod(c, a) + (Number((c.prof || {})[k]) || 0) * csPB(c);
 const memberName = (uid) => (MEMBERS.find((m) => m.id === uid) || {}).username || (uid === myId ? myName : 'A player');
+// Sheets belong to a player (keyed by their id) or to a DM token (keyed "tok:<token id>").
+// Token sheets are DM-only: the server never sends players anyone's sheet but their own.
+const isTokSheet = (uid) => String(uid || '').startsWith('tok:');
+function sheetName(uid) {
+  if (isTokSheet(uid)) { const t = ALL.tokens.get(uid.slice(4)); return t ? tokLabel(t) : 'Removed token'; }
+  return memberName(uid);
+}
+// The token on the open map that a sheet's rolls should float over.
+function sheetToken(uid) {
+  if (isTokSheet(uid)) { const t = D.tokens.get(String(uid).slice(4)); return t && t.mapId === curMap ? t : null; }
+  return tokensOn(curMap).find((t) => t.owner === uid);
+}
 const canEditSheet = (uid) => !!myId && (uid === myId || isDM);
 
 function pcCard(uid) {
   const c = CH.get(uid);
-  if (!c) return `<div class="pc-card"><span><span class="t">${esc(memberName(uid))}</span><span class="s">No character sheet yet</span></span>${canEditSheet(uid) ? `<button type="button" data-act="cs-open" data-uid="${esc(uid)}">Create</button>` : '<span></span>'}</div>`;
+  if (!c) return `<div class="pc-card"><span><span class="t">${esc(sheetName(uid))}</span><span class="s">No character sheet yet</span></span>${canEditSheet(uid) ? `<button type="button" data-act="cs-open" data-uid="${esc(uid)}">Create</button>` : '<span></span>'}</div>`;
   const max = parseInt(c.hpMax, 10) || 0, hp = parseInt(c.hp, 10);
   const pct = max ? clamp((isNaN(hp) ? max : hp) / max, 0, 1) : 0;
   const sub = [c.species, [c.cls, c.level && 'level ' + c.level].filter(Boolean).join(' ')].filter(Boolean).join(' · ');
   return `<button type="button" class="pc-card" data-act="cs-open" data-uid="${esc(uid)}">
-    <span><span class="t">${esc(c.name || memberName(uid))}</span><span class="s">${esc(sub || 'Played by ' + memberName(uid))}</span></span>
+    <span><span class="t">${esc(c.name || sheetName(uid))}</span><span class="s">${esc(sub || (isTokSheet(uid) ? 'Token sheet' : 'Played by ' + memberName(uid)))}</span></span>
     <span class="stats">${c.ac ? 'AC ' + esc(c.ac) : ''}${max ? `<br>HP ${esc(isNaN(hp) ? max : hp)}/${max}` : ''}</span>
     ${max ? `<span class="hpbar"><i class="${pct <= .25 ? 'low' : ''}" style="width:${Math.round(pct * 100)}%"></i></span>` : ''}</button>`;
 }
@@ -945,9 +957,11 @@ function partyHTML() {
       <p class="muted">Only you and your DMs can see your sheet. Tap any bonus on it to roll.</p>`;
   }
   const players = MEMBERS.filter((m) => m.role === 'player');
-  const extra = [...CH.keys()].filter((uid) => !players.some((m) => m.id === uid));
+  const tokSheets = [...CH.keys()].filter(isTokSheet);
+  const extra = [...CH.keys()].filter((uid) => !isTokSheet(uid) && !players.some((m) => m.id === uid));
   return `<div class="party"><h3>Party (${players.length})</h3>
     ${players.length ? players.map((m) => pcCard(m.id)).join('') : '<p class="muted">No players have joined yet. Invite them from <b>Members</b>.</p>'}
+    ${tokSheets.length ? `<h3 style="margin-top:8px">Token sheets</h3>${tokSheets.map(pcCard).join('')}` : ''}
     ${extra.length ? `<h3 style="margin-top:8px">Other sheets</h3>${extra.map(pcCard).join('')}` : ''}</div>
     <p class="muted">Each player fills in their own sheet. You can see and edit all of them.</p>`;
 }
@@ -958,7 +972,7 @@ function openSheet(uid) {
   if (!CH.has(uid) && !chLoaded) { toast('Still loading character sheets. Try again in a moment.'); return; }
   csUid = uid;
   if (!CH.has(uid)) {
-    const fresh = { name: '', cls: '', level: 1, species: '', background: '', str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10, saves: {}, prof: {}, ds: { s: 0, f: 0 }, created: Date.now() };
+    const fresh = { name: isTokSheet(uid) ? sheetName(uid) : '', cls: '', level: 1, species: '', background: '', str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10, saves: {}, prof: {}, ds: { s: 0, f: 0 }, created: Date.now() };
     CH.set(uid, fresh);
     db.collection('characters').doc(uid).set(fresh).catch(writeErr);
   }
@@ -966,7 +980,7 @@ function openSheet(uid) {
   renderSheet();
   setTimeout(() => { const n = $('#cs-name'); if (n && !n.value) n.focus(); }, 30);
 }
-function closeSheet() { $('#csModal').hidden = true; csUid = null; if (tab === 'party') renderPane(true); }
+function closeSheet() { $('#csModal').hidden = true; csUid = null; renderPane(true); }
 // Snapshots arriving while someone types would wipe their input, so wait until focus leaves.
 function refreshSheet() {
   if ($('#csSheet').contains(document.activeElement) && document.activeElement.matches('input, textarea')) { csDirty = true; return; }
@@ -1109,11 +1123,12 @@ function rollDice(expr) {
 }
 function shareRoll(roll) {
   toast(`${roll.who} · ${roll.label}: ${roll.total} (${roll.detail})${roll.nat === 20 ? ' · natural 20' : roll.nat === 1 ? ' · natural 1' : ''}`);
-  floatRoll(tokensOn(curMap).find((t) => t.owner === roll.uid), roll, 0);
-  if (rollsCap) rollsCap.send(roll).catch(() => {});
+  floatRoll(sheetToken(roll.uid), roll, 0);
+  // Token sheets are the DM's monsters: their rolls stay on DM screens.
+  if (rollsCap && !isTokSheet(roll.uid)) rollsCap.send(roll).catch(() => {});
 }
 function rollAttack(a, what) {
-  const c = CH.get(csUid) || {}, who = c.name || memberName(csUid), name = a.name || 'Attack';
+  const c = CH.get(csUid) || {}, who = c.name || sheetName(csUid), name = a.name || 'Attack';
   if (what === 'hit') {
     const r = d20(), b = atkHit(c, a);
     shareRoll({ uid: csUid, who, label: name + ' to hit', total: r + b, detail: `${r} ${b < 0 ? '−' : '+'} ${Math.abs(b)}`, nat: r === 20 ? 20 : r === 1 ? 1 : null });
@@ -1128,7 +1143,7 @@ function rollAttack(a, what) {
 let rangeTimer = null;
 function clearRange() { const l = $('#rangeLayer'); if (l) l.innerHTML = ''; clearTimeout(rangeTimer); }
 function showRange(a) {
-  const m = D.maps.get(curMap), t = tokensOn(curMap).find((x) => x.owner === csUid);
+  const m = D.maps.get(curMap), t = sheetToken(csUid);
   if (!isBattle(m) || !t) { toast('Open a battle map with this character’s token on it to see the range.', true); return; }
   const g = gridOf(m), w = m.w || 1600, h = m.h || 1000, rTok = g.cell * (t.size || 1) / 2;
   const [normal, long] = atkRange(a);
@@ -1212,7 +1227,7 @@ function showCastMenu(sp, levels) {
     <button type="button" data-cast-at="cancel">Cancel</button></div>`);
 }
 function castSpell(sp, chosen) {
-  const c = CH.get(csUid) || {}, who = c.name || memberName(csUid), name = sp.name || 'Spell';
+  const c = CH.get(csUid) || {}, who = c.name || sheetName(csUid), name = sp.name || 'Spell';
   const level = parseInt(sp.level, 10) || 0;
   let castAt = 0, note = '';
   if (level > 0) {
@@ -1257,10 +1272,10 @@ function rollCs(key) {
   else if (key === 'spellatk') { label = 'Spell attack'; bonus = spAtk(c); }
   else { label = ABILS.find((x) => x[0] === key)[1] + ' check'; bonus = csMod(c, key); }
   const total = r + bonus, detail = `${r} ${bonus < 0 ? '\u2212' : '+'} ${Math.abs(bonus)}`, nat = r === 20 ? 20 : r === 1 ? 1 : null;
-  const roll = { uid: csUid, who: c.name || memberName(csUid), label, total, detail, nat };
+  const roll = { uid: csUid, who: c.name || sheetName(csUid), label, total, detail, nat };
   toast(`${roll.who} \u00b7 ${label}: ${total} (${detail})${nat === 20 ? ' \u00b7 natural 20' : nat === 1 ? ' \u00b7 natural 1' : ''}`);
-  floatRoll(tokensOn(curMap).find((t) => t.owner === csUid), roll, 0);
-  if (rollsCap) rollsCap.send(roll).catch(() => {});
+  floatRoll(sheetToken(csUid), roll, 0);
+  if (rollsCap && !isTokSheet(csUid)) rollsCap.send(roll).catch(() => {});
 }
 $('#csSheet').addEventListener('change', (e) => {
   const t = e.target, c = CH.get(csUid) || {};
@@ -1396,7 +1411,7 @@ window.addEventListener('atlas-rolls', (e) => {
     if (roll.by === myId) return;   // our own rolls were shown when we made them
     const age = now - roll.at;
     if (age >= ROLL_MS) return;
-    const shown = floatRoll(tokensOn(curMap).find((t) => t.owner === roll.uid), roll, age);
+    const shown = floatRoll(sheetToken(roll.uid), roll, age);
     if (!shown && age < 5000) toast(`${roll.who} · ${roll.label}: ${roll.total} (${roll.detail})${roll.nat === 20 ? ' · natural 20' : roll.nat === 1 ? ' · natural 1' : ''}`);
   });
 });
@@ -1467,7 +1482,10 @@ async function deleteMap(id) {
     D.places.delete(p.id); await remove('places', p.id);
   }
   for (const n of npcsOn(id)) { D.npcs.set(n.id, { ...n, mapId: null, x: null, y: null }); await patch('npcs', n.id, { mapId: null, x: null, y: null }); }
-  for (const t of tokensOn(id)) { D.tokens.delete(t.id); await remove('tokens', t.id); }
+  for (const t of tokensOn(id)) {
+    D.tokens.delete(t.id); await remove('tokens', t.id);
+    if (CH.has('tok:' + t.id)) { CH.delete('tok:' + t.id); try { await db.collection('characters').doc('tok:' + t.id).delete(); } catch (e) {} }
+  }
   D.maps.delete(id); await remove('maps', id);
   try { if (m.asset && assets) await assets.delete(m.asset); } catch (e) {}
   const parent = m.placeId && D.places.get(m.placeId);
@@ -1691,7 +1709,7 @@ function tokenHTML(t) {
   return `<div class="kicker"><button type="button" class="link" data-act="back">← ${esc(D.maps.get(t.mapId)?.name || 'Map')}</button><span class="lbl">Token</span></div>
     <div class="field"><label class="lbl" for="fName">Name</label><input id="fName" value="${esc(t.name)}" maxlength="40" placeholder="${esc(npc ? npc.name + ' (from the NPC)' : '')}" data-f="token:name"${d}></div>
     ${editable ? `<div class="field"><label class="lbl" for="tNpc">Linked NPC</label><select id="tNpc" data-f="token:npcId"><option value="">None</option>${[...D.npcs.values()].sort((a, b) => a.name.localeCompare(b.name)).map((n) => `<option value="${esc(n.id)}"${t.npcId === n.id ? ' selected' : ''}>${esc(n.name)}</option>`).join('')}</select></div>` : ''}
-    ${npc ? npcCard(npc) : ''}
+    ${npc ? npcCard(npc) : tokenSheetHTML(t)}
     <div class="field"><span class="lbl">Picture</span>
       <div class="tokpic"><span class="pv" style="--tc:${tokColor(t.color)}${safeImg(t.img) ? `;--ti:url('${esc(safeImg(t.img))}')` : ''}">${safeImg(t.img) ? '' : esc(initials(tokLabel(t)))}</span>
         ${canPicture(t) ? `<div class="btnrow"><label class="btn" for="tokImgIn" data-act="tok-img">${t.img ? 'Change picture' : 'Upload picture'}</label>${t.img ? '<button type="button" data-act="tok-img-rm">Remove</button>' : ''}</div>` : ''}
@@ -1725,6 +1743,15 @@ function refreshMembers() {
   userCap.members().then((m) => {
     if (JSON.stringify(m) !== JSON.stringify(MEMBERS)) { MEMBERS = m; renderPane(true); }
   }).catch(() => {});
+}
+function tokenSheetHTML(t) {
+  if (!editable || !myId) return '';
+  const key = 'tok:' + t.id, c = CH.get(key);
+  if (!c) return `<div class="field"><span class="lbl">Character sheet</span><div class="btnrow"><button type="button" data-act="cs-open" data-uid="${esc(key)}">Create sheet</button></div><p class="muted">Abilities, attacks and spells for this token. Only DMs can see it, and its rolls stay on DM screens.</p></div>`;
+  const hp = c.hpMax ? `HP ${c.hp === '' || c.hp == null ? c.hpMax : c.hp}/${c.hpMax}` : '';
+  return `<div class="field"><span class="lbl">Character sheet</span><button type="button" class="item" data-act="cs-open" data-uid="${esc(key)}" style="border:1px solid var(--line)">
+    <span class="face" style="border-color:${tokColor(t.color)}">${esc(initials(c.name || tokLabel(t)))}</span>
+    <span><span class="t">${esc(c.name || tokLabel(t))}</span><span class="s">${esc([c.ac && 'AC ' + c.ac, hp].filter(Boolean).join(' \u00b7 ') || 'Open to fill in')}</span></span><span class="chip">Open sheet</span></button></div>`;
 }
 function tokensSection(n) {
   const toks = [...D.tokens.values()].filter((t) => t.npcId === n.id);
@@ -1912,6 +1939,7 @@ $('#pane').addEventListener('click', (e) => {
   }
   else if (act === 'del-token' && cur) arm(b, 'dt' + cur.id, 'Click again to remove', async () => {
     D.tokens.delete(cur.id); sel = null; render(true); await remove('tokens', cur.id);
+    if (CH.has('tok:' + cur.id)) { CH.delete('tok:' + cur.id); try { await db.collection('characters').doc('tok:' + cur.id).delete(); } catch (e) {} }
   });
   else if ((act === 'reveal' || act === 'untold-del') && cur) {
     const list = (SH.get(cur.id) || {}).untold || [];
