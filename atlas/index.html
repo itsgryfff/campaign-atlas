@@ -293,7 +293,7 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
 .slot .pips { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; min-height: 14px; }
 .pip2 { width: 13px; height: 13px; padding: 0; border-radius: 50%; border: 2px solid var(--accent); background: var(--accent); }
 .pip2.used { background: transparent; border-color: var(--line); }
-.spl { display: grid; grid-template-columns: minmax(120px, 1.5fr) 92px 34px minmax(128px, 1.1fr) 84px 108px 72px 34px 58px auto 28px; gap: 6px; align-items: center; }
+.spl { display: grid; grid-template-columns: minmax(110px, 1.4fr) 88px 34px minmax(118px, 1fr) 76px 70px 100px 70px 34px 58px auto 28px; gap: 6px; align-items: center; }
 .spl.head { font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; }
 .spl select, .spl input { padding: .35rem .4rem; }
 .spl .ft { display: flex; align-items: center; gap: 4px; }
@@ -305,6 +305,8 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
   .spl { grid-template-columns: 1fr 1fr 1fr; padding: 8px; border: 1px solid var(--line); border-radius: 8px; }
   .spl > :first-child { grid-column: 1 / -1; }
 }
+.castmenu { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 10px; border: 1px solid var(--accent); border-radius: 8px; background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.castmenu .lbl { margin-right: 4px; }
 .rangelayer { position: absolute; inset: 0; pointer-events: none; }
 .rangering { position: absolute; border-radius: 50%; transform: translate(-50%, -50%); border: calc(2.5px * var(--inv)) solid var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .rangering.long { border-style: dashed; border-color: var(--brass); background: color-mix(in srgb, var(--brass) 6%, transparent); }
@@ -1158,6 +1160,7 @@ function spellsHTML(c, ed) {
       <button type="button" class="pf p${sp.prep !== false ? 1 : 0}" data-sp-act="prep" title="Prepared" aria-label="Prepared"${d}>${sp.prep !== false ? '●' : ''}</button>
       <select data-k="effect" aria-label="Effect"${d}>${SPELL_EFFECTS.map(([v, l]) => `<option value="${v}"${(sp.effect || 'none') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
       <input value="${esc(sp.dice || '')}" placeholder="1d10" data-k="dice" aria-label="Dice"${d}>
+      <input value="${esc(sp.up || '')}" placeholder="${(parseInt(sp.level, 10) || 0) ? '+1d6' : 'auto'}" data-k="up" aria-label="Extra dice per slot level above the spell\u2019s level" title="${(parseInt(sp.level, 10) || 0) ? 'Extra dice for each slot level above this spell\u2019s level' : 'Cantrip damage grows with character level automatically'}"${d}${(parseInt(sp.level, 10) || 0) ? '' : ' disabled'}>
       <select data-k="type" aria-label="Damage type"${d}><option value="">—</option>${DMG_TYPES.map((t) => `<option${sp.type === t ? ' selected' : ''}>${t}</option>`).join('')}</select>
       <span class="ft"><input type="number" min="0" step="5" value="${esc(sp.range ?? '')}" placeholder="0" data-k="range" aria-label="Range in feet (0 for self or touch)"${d}><span>ft</span></span>
       <button type="button" class="pf p${sp.conc ? 2 : 0}" data-sp-act="conc" title="Concentration" aria-label="Concentration"${d}>${sp.conc ? 'C' : ''}</button>
@@ -1174,35 +1177,71 @@ function spellsHTML(c, ed) {
       ${ed ? '<button type="button" data-sp-act="rest" title="Refill all spell slots and end concentration">Long rest</button>' : ''}
     </div>
     <div class="slots">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(slotBox).join('')}</div>
-    ${list.length ? `<div class="spl head"><span>Spell</span><span>Level</span><span>Prep</span><span>Effect</span><span>Dice</span><span>Type</span><span>Range</span><span>Conc</span><span></span><span></span><span></span></div>${list.map(row).join('')}`
+    ${list.length ? `<div class="spl head"><span>Spell</span><span>Level</span><span>Prep</span><span>Effect</span><span>Dice</span><span>Upcast</span><span>Type</span><span>Range</span><span>Conc</span><span></span><span></span><span></span></div>${list.map(row).join('')}`
       : '<p class="muted">No spells yet. Add them to cast from here: the right slot is used and the roll goes to the table.</p>'}
   </div>`;
 }
-function castSpell(sp) {
+// Slot levels this spell could use right now (its own level or higher, with a slot left).
+function castLevels(c, level) {
+  const slots = c.slots || {}, out = [];
+  for (let L = level; L <= 9; L++) { const sl = slots[L] || {}, left = (parseInt(sl.max, 10) || 0) - (parseInt(sl.used, 10) || 0); if (left > 0) out.push([L, left]); }
+  return out;
+}
+// Cantrip damage dice grow at character levels 5, 11 and 17.
+const cantripTier = (c) => { const lv = parseInt(c.level, 10) || 1; return lv >= 17 ? 4 : lv >= 11 ? 3 : lv >= 5 ? 2 : 1; };
+function spellDice(c, sp, castAt) {
+  const level = parseInt(sp.level, 10) || 0;
+  let expr = String(sp.dice || '').replace(/\s+/g, '');
+  if (!expr) return '';
+  if (level === 0) { const k = cantripTier(c); if (k > 1) expr = expr.replace(/(\d*)d(\d+)/g, (m, n, sides) => `${(parseInt(n || '1', 10)) * k}d${sides}`); }
+  else if (castAt > level && sp.up) { const extra = String(sp.up).replace(/\s+/g, '').replace(/^\+/, ''); expr += ('+' + extra).repeat(castAt - level); }
+  // Fold repeated dice of the same size together, so 8d6+1d6+1d6 reads as 10d6.
+  const sizes = {}, rest = [];
+  for (const m of expr.matchAll(/([+-]?)(\d*)d(\d+)|([+-]?)(\d+)/g)) {
+    if (m[3] && m[1] !== '-') sizes[m[3]] = (sizes[m[3]] || 0) + parseInt(m[2] || '1', 10);
+    else rest.push(m[0].startsWith('+') || m[0].startsWith('-') ? m[0] : '+' + m[0]);
+  }
+  const flat = rest.reduce((t, x) => t + (parseInt(x, 10) || 0), 0);
+  return Object.entries(sizes).map(([sz, n]) => `${n}d${sz}`).join('+') + (flat ? (flat > 0 ? '+' : '') + flat : '');
+}
+function showCastMenu(sp, levels) {
+  document.querySelectorAll('#csSheet .castmenu').forEach((m) => m.remove());
+  const row = document.querySelector(`#csSheet .spl[data-sp="${sp.id}"]`); if (!row) return;
+  row.insertAdjacentHTML('afterend', `<div class="castmenu" data-for="${esc(sp.id)}"><span class="lbl">Cast ${esc(sp.name || 'spell')} at</span>
+    ${levels.map(([L, left]) => `<button type="button" data-cast-at="${L}">${SPELL_LEVELS[L]} · ${left} left</button>`).join('')}
+    <button type="button" data-cast-at="cancel">Cancel</button></div>`);
+}
+function castSpell(sp, chosen) {
   const c = CH.get(csUid) || {}, who = c.name || memberName(csUid), name = sp.name || 'Spell';
   const level = parseInt(sp.level, 10) || 0;
   let castAt = 0, note = '';
   if (level > 0) {
-    const slots = c.slots || {};
-    for (let L = level; L <= 9; L++) { const sl = slots[L] || {}; if ((parseInt(sl.used, 10) || 0) < (parseInt(sl.max, 10) || 0)) { castAt = L; break; } }
-    if (!castAt) { toast(`No spell slots left for ${name} (${SPELL_LEVELS[level]} level or higher).`, true); return; }
-    const sl = slots[castAt] || {};
+    const levels = castLevels(c, level);
+    if (!levels.length) { toast(`No spell slots left for ${name} (${SPELL_LEVELS[level]} level or higher).`, true); return; }
+    if (chosen == null && levels.length > 1) { showCastMenu(sp, levels); return; }
+    castAt = chosen != null ? chosen : levels[0][0];
+    if (!levels.some(([L]) => L === castAt)) { toast(`No ${SPELL_LEVELS[castAt]} level slots left.`, true); return; }
+    const slots = c.slots || {}, sl = slots[castAt] || {};
     saveSheet({ slots: { ...slots, [castAt]: { ...sl, used: (parseInt(sl.used, 10) || 0) + 1 } } });
-    if (castAt > level) note = ` at ${SPELL_LEVELS[castAt]} level`;
+    if (castAt > level) note = ` at ${SPELL_LEVELS[castAt]}`;
   }
   if (sp.conc) saveSheet({ concOn: name });
   const eff = sp.effect || 'none';
   if (eff === 'attack') {
     const r = d20(), b = spAtk(c);
-    shareRoll({ uid: csUid, who, label: `${name}${note} to hit`, total: r + b, detail: `${r} ${b < 0 ? '−' : '+'} ${Math.abs(b)}`, nat: r === 20 ? 20 : r === 1 ? 1 : null });
+    shareRoll({ uid: csUid, who, label: `${name}${note} to hit`.slice(0, 40), total: r + b, detail: `${r} ${b < 0 ? '−' : '+'} ${Math.abs(b)}`, nat: r === 20 ? 20 : r === 1 ? 1 : null });
   }
-  const save = eff.startsWith('save:') ? `DC ${spDC(c)} ${eff.slice(5).toUpperCase()} save` : '';
-  if (sp.dice) {
-    const dice = rollDice(sp.dice);
-    if (!dice) toast('Write the spell’s dice like 1d10 or 8d6.', true);
-    else shareRoll({ uid: csUid, who, label: `${name}${eff === 'attack' ? '' : note} ${eff === 'heal' ? 'healing' : sp.type || 'damage'}`.slice(0, 40), total: Math.max(0, dice.total), detail: (save ? save + ' · ' : '') + dice.detail, nat: null });
+  const save = eff.startsWith('save:') ? `DC ${spDC(c)} ${eff.slice(5).toUpperCase()}` : '';
+  const expr = spellDice(c, sp, castAt);
+  if (expr) {
+    const dice = rollDice(expr);
+    if (!dice) toast('Write the spell’s dice like 1d10 or 8d6, and upcast dice like 1d6.', true);
+    else {
+      const detail = (save ? save + ' save · ' : '') + (dice.detail.length + (save ? 14 : 0) > 40 ? expr : dice.detail);
+      shareRoll({ uid: csUid, who, label: `${name}${eff === 'attack' ? '' : note} ${eff === 'heal' ? 'healing' : sp.type || 'damage'}`.slice(0, 40), total: Math.max(0, dice.total), detail, nat: null });
+    }
   } else if (save) {
-    shareRoll({ uid: csUid, who, label: `${name}${note}`, total: `DC ${spDC(c)}`, detail: save, nat: null });
+    shareRoll({ uid: csUid, who, label: `${name}${note}`, total: `DC ${spDC(c)}`, detail: save + ' save', nat: null });
   } else if (eff !== 'attack') {
     shareRoll({ uid: csUid, who, label: `Casts ${name}${note}`.slice(0, 40), total: '✨', detail: sp.conc ? 'concentration' : '', nat: null });
   }
@@ -1282,11 +1321,16 @@ $('#csSheet').addEventListener('click', (e) => {
     const L = b.dataset.pip, i = +b.dataset.i, slots = c.slots || {}, sl = slots[L] || {}, used = parseInt(sl.used, 10) || 0;
     saveSheet({ slots: { ...slots, [L]: { ...sl, used: used > i ? i : i + 1 } } }); renderSheet();
   }
+  else if (b.dataset.castAt) {
+    const menu = b.closest('.castmenu'), sp = (c.splist || []).find((x) => x.id === menu.dataset.for);
+    menu.remove();
+    if (b.dataset.castAt !== 'cancel' && sp) castSpell(sp, parseInt(b.dataset.castAt, 10));
+  }
   else if (b.dataset.spAct) {
     const act = b.dataset.spAct, id = (b.closest('[data-sp]') || {}).dataset?.sp;
     const list = c.splist || [], sp = list.find((x) => x.id === id);
     if (act === 'add') {
-      saveSheet({ splist: [...list, { id: uid(), name: '', level: 0, prep: true, effect: 'attack', dice: '1d10', type: 'fire', range: 120, conc: false }] }); renderSheet();
+      saveSheet({ splist: [...list, { id: uid(), name: '', level: 0, prep: true, effect: 'none', dice: '', type: '', range: '', conc: false }] }); renderSheet();
       setTimeout(() => { const ins = [...document.querySelectorAll('#csSheet .spl[data-sp] input[data-k="name"]')].find((x) => !x.value); if (ins) ins.focus(); }, 20);
     }
     else if (act === 'rest') {
