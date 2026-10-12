@@ -341,6 +341,16 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
 @keyframes rollUp { 0% { transform: translateY(8px); opacity: 0; } 3% { transform: translateY(0); opacity: 1; } 45% { opacity: 1; } 100% { transform: translateY(-140px); opacity: 0; } }
 @keyframes rollFade { 0% { opacity: 0; } 3% { opacity: 1; } 45% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .rollfloat .rf { animation-name: rollFade; } }
+/* Party notes: shared by everyone in the campaign */
+.pn-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.pn-list li { padding: 8px 0; border-bottom: 1px solid var(--line); display: grid; gap: 3px; }
+.pn-list li:last-child { border-bottom: 0; }
+.pn-meta { font-size: .78rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+.pn-meta b { color: var(--ink); }
+.pn-meta .link { font-size: .78rem; }
+.pn-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.pn-form, .pn-editor { display: grid; gap: 6px; }
+.pn-form textarea, .pn-editor textarea { min-height: 70px; }
 .swatches { display: flex; gap: 6px; flex-wrap: wrap; }
 .sw { width: 28px; height: 28px; border-radius: 50%; padding: 0; background: var(--sw); border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--line); }
 .sw:hover { background: var(--sw); filter: brightness(1.1); }
@@ -444,7 +454,9 @@ const HID = { maps: new Map(), places: new Map(), npcs: new Map(), tokens: new M
 const ALL = { maps: new Map(), places: new Map(), npcs: new Map(), tokens: new Map() };
 let MEMBERS = [], myId = null, myName = '';
 let tokenImgs = null;
-let rollsCap = null;    // the host's shared roll feed, when it has one   // the host's token-picture uploader, when it has one (players can use it too)   // campaign members and who is viewing, when the host provides them
+let rollsCap = null;
+let notesCap = null;    // the host's party-notes writer, when it has one
+const PN = new Map();   // 'npc:<id>' or 'place:<id>' -> { entries: [{ id, by, byName, text, at }] }    // the host's shared roll feed, when it has one   // the host's token-picture uploader, when it has one (players can use it too)   // campaign members and who is viewing, when the host provides them
 const SH = new Map();   // npc id -> { sheet, sheetFile }, readable by the DM only
 const PS = new Map();   // place id -> { secret }, readable by the DM only
 let D = ALL;
@@ -1751,6 +1763,7 @@ function placeHTML(p) {
     ${visRow('places', p)}
     <div class="field"><label class="lbl" for="fNotes">Notes${notesLbl()}</label><textarea id="fNotes" data-f="place:notes" placeholder="What the party knows, rumours, who runs it…"${dis()}>${esc(p.notes)}</textarea></div>
     ${showSheets() ? `<div class="field"><label class="lbl" for="pSecret">DM secrets <span class="chip dm">DM only</span></label><textarea id="pSecret" data-f="psecret:secret" placeholder="Traps, hidden loot, what's really going on\u2026"${dis()}>${esc((PS.get(p.id) || {}).secret || '')}</textarea></div>` : ''}
+    ${partyNotesHTML('place:' + p.id)}
     <div class="section"><div class="section-head"><h3>Maps of ${esc(p.name)}</h3>${editable ? '<label class="btn" for="fileIn" data-act="add-child">Add map</label>' : ''}</div>
       ${kids.length ? `<ul class="list">${kids.map((m) => `<li><button type="button" class="item" data-map="${m.id}"><span class="dot"></span><span><span class="t">${esc(m.name)}</span><span class="s">${placesOn(m.id).length} places · ${npcsOn(m.id).length} NPCs</span></span><span class="chip">Open</span></button></li>`).join('')}</ul>`
         : `<p class="muted">${editable ? 'Add a city plan, dungeon layout or building interior. It opens when you go into this place.' : 'No detailed maps.'}</p>`}</div>
@@ -1872,6 +1885,32 @@ function tokenSheetHTML(t) {
     <span class="face" style="border-color:${tokColor(t.color)}">${esc(initials(c.name || tokLabel(t)))}</span>
     <span><span class="t">${esc(c.name || tokLabel(t))}</span><span class="s">${esc([c.ac && 'AC ' + c.ac, hp].filter(Boolean).join(' \u00b7 ') || 'Open to fill in')}</span></span><span class="chip">Open sheet</span></button></div>`;
 }
+function ago(t) {
+  const m = Math.round((Date.now() - (t || 0)) / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m} min ago`;
+  if (m < 1440) return `${Math.round(m / 60)} h ago`;
+  if (m < 10080) return `${Math.round(m / 1440)} d ago`;
+  return new Date(t).toLocaleDateString();
+}
+// Notes anyone in the campaign can add about an NPC or place. Separate from the DM's own notes.
+function partyNotesHTML(target) {
+  const entries = (PN.get(target) || {}).entries || [];
+  const canWrite = !!(notesCap && myId);
+  return `<div class="section"><div class="section-head"><h3>Party notes (${entries.length})</h3><span class="chip">Shared with the party</span></div>
+    ${entries.length ? `<ul class="pn-list">${entries.map((e) => `<li data-note="${esc(e.id)}" data-target="${esc(target)}">
+        <div class="pn-meta"><b>${esc(e.byName || 'Someone')}</b><span>${esc(ago(e.at))}${e.edited ? ' · edited' : ''}</span>
+          ${e.by === myId ? '<button type="button" class="link" data-act="pn-edit">Edit</button>' : ''}
+          ${canWrite && (e.by === myId || isDM) ? '<button type="button" class="link danger" data-act="pn-del">Delete</button>' : ''}</div>
+        <div class="pn-text">${esc(e.text)}</div></li>`).join('')}</ul>`
+      : `<p class="muted">${canWrite ? 'Nothing yet. Anyone in the party can add what they’ve learned here.' : 'No party notes yet.'}</p>`}
+    ${canWrite ? `<form class="pn-form" data-target="${esc(target)}"><label class="sr" for="pn-${esc(target)}">Add a party note</label><textarea id="pn-${esc(target)}" class="pn-input" maxlength="2000" placeholder="What did we learn? Who said what?"></textarea><div class="btnrow"><button type="submit" class="primary">Add note</button></div></form>` : ''}
+  </div>`;
+}
+function localNotes(target, fn) {
+  const doc = PN.get(target) || { entries: [] };
+  PN.set(target, { entries: fn([...(doc.entries || [])]) });
+}
 function tokensSection(n) {
   const toks = [...D.tokens.values()].filter((t) => t.npcId === n.id);
   const here = D.maps.get(curMap);
@@ -1899,6 +1938,7 @@ function npcHTML(n) {
     </div>
     ${visRow('npcs', n)}
     <div class="field"><label class="lbl" for="fNotes">${isDM ? 'Told to the party' + notesLbl() : 'What the party knows'}</label><textarea id="fNotes" data-f="npc:notes" placeholder="What they\u2019ve said, how they act, what the party has learned\u2026"${dis()}>${esc(n.notes)}</textarea></div>
+    ${partyNotesHTML('npc:' + n.id)}
     ${showSheets() ? untoldHTML(n) + sheetHTML(n) : ''}
     <div class="section"><h3>On the map</h3>
       ${onMap ? `<p class="muted">Pinned on <button type="button" class="link" data-act="goto-npc">${esc(onMap.name)}</button></p>` : '<p class="muted">Not pinned on any map.</p>'}
@@ -2009,6 +2049,15 @@ $('#pane').addEventListener('change', async (e) => {
 });
 $('#pane').addEventListener('input', (e) => { if (e.target.id === 'npcSearch') { npcQuery = e.target.value; const pos = e.target.selectionStart; renderPane(true); const s = $('#npcSearch'); s.focus(); s.setSelectionRange(pos, pos); } });
 $('#pane').addEventListener('submit', async (e) => {
+  if (e.target.classList.contains('pn-form')) {
+    e.preventDefault();
+    const target = e.target.dataset.target, ta = e.target.querySelector('textarea'), text = ta.value.trim();
+    if (!text || !notesCap) return;
+    localNotes(target, (l) => [...l, { id: 'local' + Date.now(), by: myId, byName: myName, text, at: Date.now() }]);
+    ta.value = ''; renderPane(true);
+    notesCap.add(target, text).catch((err) => { toast(err.message || 'That note didn\u2019t save. Try again.', true); });
+    return;
+  }
   if (e.target.id === 'untoldForm') {
     e.preventDefault();
     const n = D.npcs.get(sel && sel.id); const text = $('#uText').value.trim();
@@ -2048,6 +2097,22 @@ $('#pane').addEventListener('click', (e) => {
   }
   else if (act === 'del-place' && cur) arm(b, 'dp' + cur.id, 'Click again to delete', () => deletePlace(cur.id));
   else if (act === 'cs-open') { openSheet(b.dataset.uid); }
+  else if (act === 'pn-edit' || act === 'pn-del' || act === 'pn-save' || act === 'pn-cancel') {
+    const li = b.closest('[data-note]'), target = li.dataset.target, id = li.dataset.note;
+    const entry = ((PN.get(target) || {}).entries || []).find((x) => x.id === id);
+    if (act === 'pn-edit' && entry) {
+      li.querySelector('.pn-text').outerHTML = `<div class="pn-editor"><textarea maxlength="2000" aria-label="Edit note">${esc(entry.text)}</textarea><div class="btnrow"><button type="button" class="primary" data-act="pn-save">Save</button><button type="button" data-act="pn-cancel">Cancel</button></div></div>`;
+      li.querySelector('.pn-editor textarea').focus();
+    } else if (act === 'pn-cancel') renderPane(true);
+    else if (act === 'pn-save') {
+      const text = li.querySelector('.pn-editor textarea').value.trim(); if (!text) return;
+      localNotes(target, (l) => l.map((x) => (x.id === id ? { ...x, text, edited: Date.now() } : x))); renderPane(true);
+      notesCap.edit(target, id, text).catch((err) => toast(err.message || 'That edit didn\u2019t save.', true));
+    } else if (act === 'pn-del') arm(b, 'pn' + id, 'Click again to delete', () => {
+      localNotes(target, (l) => l.filter((x) => x.id !== id)); renderPane(true);
+      notesCap.delete(target, id).catch((err) => toast(err.message || 'That note wasn\u2019t deleted.', true));
+    });
+  }
   else if (act === 'tok-img' && cur) { tokImgFor = cur.id; $('#tokImgIn').value = ''; }
   else if (act === 'tok-img-rm' && cur && canPicture(cur)) {
     const old = cur.img; D.tokens.set(cur.id, { ...cur, img: null }); render(true);
@@ -2140,6 +2205,7 @@ render();
     userCap = u;
     tokenImgs = await c.use('tokenImages').catch(() => null);
     rollsCap = await c.use('rolls').catch(() => null);
+    notesCap = await c.use('partyNotes').catch(() => null);
   } catch (e) {}
   if (isDM && !assets) console.warn('Atlas: assets capability unavailable in this view; map uploads disabled.');
   ['maps', 'places', 'npcs', 'tokens'].forEach((col) => subscribe(col, false));
@@ -2149,6 +2215,10 @@ render();
     subscribeSecrets('dm/sheets/places', PS);
   }
   // Character sheets: the host sends a player only their own; DMs get everyone's.
+  db.collection('partynotes').onSnapshot((snap) => {
+    PN.clear(); snap.docs.forEach((d) => PN.set(d.id, d.data()));
+    renderPane();
+  }, onSnapErr);
   if (myId) db.collection('characters').onSnapshot((snap) => {
     CH.clear(); snap.docs.forEach((d) => CH.set(d.id, d.data())); chLoaded = true;
     if (tab === 'party') renderPane();
