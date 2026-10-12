@@ -268,6 +268,22 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
 .pf.p1 { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .pf.p2 { background: var(--brass); border-color: var(--brass); color: var(--surface); }
 .cs-text { display: grid; gap: 10px; }
+.cs-attacks { display: grid; gap: 8px; }
+.atk { display: grid; grid-template-columns: minmax(120px, 1.6fr) minmax(130px, 1.3fr) 104px 34px 66px minmax(90px, .9fr) minmax(90px, .9fr) 68px auto 28px; gap: 6px; align-items: center; }
+.atk.head { font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; }
+.atk .rng { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.atk .rng .dist { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.atk .rng .dist input { font-family: var(--mono); padding: .3rem .3rem; }
+.atk select, .atk input { padding: .35rem .4rem; }
+.atk .roll { width: 100%; }
+@media (max-width: 860px) {
+  .atk.head { display: none; }
+  .atk { grid-template-columns: 1fr 1fr 1fr; padding: 8px; border: 1px solid var(--line); border-radius: 8px; }
+  .atk > :first-child { grid-column: 1 / -1; }
+}
+.rangelayer { position: absolute; inset: 0; pointer-events: none; }
+.rangering { position: absolute; border-radius: 50%; transform: translate(-50%, -50%); border: calc(2.5px * var(--inv)) solid var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.rangering.long { border-style: dashed; border-color: var(--brass); background: color-mix(in srgb, var(--brass) 6%, transparent); }
 .cs-text textarea { min-height: 84px; }
 .cs-misc { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: .9rem; }
 .cs-misc label, .cs-misc .dsg { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
@@ -314,7 +330,7 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
   <main class="layout">
     <section class="mapwrap" id="mapwrap" aria-label="Map">
       <div class="viewport" id="vp">
-        <div class="stage" id="stage"><img id="mapImg" alt=""><div class="gridlayer" id="gridLayer" hidden></div><div class="pins" id="pins"></div><div class="floats" id="floats"></div></div>
+        <div class="stage" id="stage"><img id="mapImg" alt=""><div class="gridlayer" id="gridLayer" hidden></div><div class="rangelayer" id="rangeLayer"></div><div class="pins" id="pins"></div><div class="floats" id="floats"></div></div>
       </div>
       <div class="mapbar">
         <div class="seg" id="upSeg" hidden><button type="button" id="upBtn" class="upbtn"></button></div>
@@ -716,7 +732,7 @@ function openMap(id, keepSel) {
   render(true);
 }
 function loadImage() {
-  $('#floats').innerHTML = '';
+  $('#floats').innerHTML = ''; clearRange();
   const m = D.maps.get(curMap); if (!m) return;
   V.w = m.w || 1600; V.h = m.h || 1000;
   stage.style.width = V.w + 'px'; stage.style.height = V.h + 'px';
@@ -958,6 +974,7 @@ function renderSheet() {
         <span class="dsg"><span class="lbl">Death saves</span> Successes ${[0, 1, 2].map((i) => `<input type="checkbox" data-ds="s" data-i="${i}" aria-label="Success ${i + 1}"${(ds.s || 0) > i ? ' checked' : ''}${d}>`).join('')}</span>
         <span class="dsg">Failures ${[0, 1, 2].map((i) => `<input type="checkbox" data-ds="f" data-i="${i}" aria-label="Failure ${i + 1}"${(ds.f || 0) > i ? ' checked' : ''}${d}>`).join('')}</span>
       </div>
+      ${attacksHTML(c, ed)}
       <div class="cs-main">
         <div class="cs-abil"><span class="lbl">Abilities · check · save</span>
           ${ABILS.map(([a, l]) => `<div class="cs-ab"><span class="nm" title="${l}">${a.toUpperCase()}</span>
@@ -969,7 +986,7 @@ function renderSheet() {
           ${SKILLS.map(([k, l, a]) => `<div class="cs-row">${pf(k, Number((c.prof || {})[k]) || 0)}<button type="button" class="roll" data-roll-cs="skill.${k}" data-out="skill.${k}"></button><span>${l}<span class="cs-abl">${a.toUpperCase()}</span></span></div>`).join('')}
         </div>
         <div class="cs-text">
-          ${ta('attacks', 'Attacks', 'Longsword: +5 to hit, 1d8+3 slashing')}
+          ${ta('attacks', 'Other attack notes', 'Extra attack, Sneak Attack dice, special rules')}
           ${ta('spells', 'Spells', 'Cantrips, prepared spells, slots')}
           ${ta('features', 'Features and traits', 'Second Wind, Darkvision…')}
           ${ta('equipment', 'Equipment and money', 'Chain mail, shield, 15 gp')}
@@ -988,6 +1005,14 @@ function updateDerived() {
   ABILS.forEach(([a]) => { set('mod.' + a, f(csMod(c, a))); set('save.' + a, f(csSave(c, a))); });
   SKILLS.forEach(([k, , a]) => set('skill.' + k, f(csSkill(c, k, a))));
   const t = $('#csTitle'); if (t) t.textContent = c.name || 'New character';
+  updateAttackNumbers();
+}
+function updateAttackNumbers() {
+  const c = CH.get(csUid) || {};
+  document.querySelectorAll('#csSheet .atk[data-atk]').forEach((row) => {
+    const a = (c.atks || []).find((x) => x.id === row.dataset.atk); const b = row.querySelector('[data-atk-act="hit"]');
+    if (a && b) b.textContent = sgn(atkHit(c, a));
+  });
 }
 // Saves one field (or one nested field) and updates the numbers on screen.
 async function saveSheet(patch) {
@@ -997,6 +1022,96 @@ async function saveSheet(patch) {
   CH.set(csUid, merged); updateDerived();
   try { await db.collection('characters').doc(csUid).update(patch); } catch (e) { writeErr(e); }
 }
+/* ---------- Attacks ---------- */
+const RANGES = [['melee', 'Melee (5 ft)'], ['reach', 'Reach (10 ft)'], ['ranged', 'Ranged'], ['thrown', 'Thrown']];
+const ATK_ABILS = [['str', 'STR'], ['dex', 'DEX'], ['finesse', 'Finesse'], ['int', 'INT'], ['wis', 'WIS'], ['cha', 'CHA'], ['none', 'None']];
+const DMG_TYPES = ['slashing', 'piercing', 'bludgeoning', 'fire', 'cold', 'lightning', 'thunder', 'acid', 'poison', 'necrotic', 'radiant', 'force', 'psychic'];
+function atkMod(c, a) {
+  if (a.ability === 'none') return 0;
+  if (a.ability === 'finesse') return Math.max(csMod(c, 'str'), csMod(c, 'dex'));
+  return csMod(c, a.ability || 'str');
+}
+const atkHit = (c, a) => atkMod(c, a) + (a.prof !== false ? csPB(c) : 0) + (parseInt(a.bonus, 10) || 0);
+// Normal and long range in feet; melee and reach have no long range.
+function atkRange(a) {
+  if (a.range === 'reach') return [10, 0];
+  if (a.range === 'ranged' || a.range === 'thrown') return [parseInt(a.normal, 10) || (a.range === 'thrown' ? 20 : 80), parseInt(a.long, 10) || 0];
+  return [5, 0];
+}
+const sgn = (n) => (n >= 0 ? '+' : '−') + Math.abs(n);
+function attacksHTML(c, ed) {
+  const list = c.atks || [], d = ed ? '' : ' disabled';
+  const row = (a) => {
+    const ranged = a.range === 'ranged' || a.range === 'thrown';
+    return `<div class="atk" data-atk="${esc(a.id)}">
+      <input value="${esc(a.name || '')}" placeholder="Longsword" data-k="name" aria-label="Attack name"${d}>
+      <div class="rng"><select data-k="range" aria-label="Range"${d}>${RANGES.map(([v, l]) => `<option value="${v}"${(a.range || 'melee') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
+        ${ranged ? `<div class="dist"><input type="number" min="5" step="5" value="${esc(atkRange(a)[0])}" data-k="normal" aria-label="Normal range in feet" title="Normal range (ft)"${d}><input type="number" min="0" step="5" value="${esc(atkRange(a)[1] || '')}" placeholder="long" data-k="long" aria-label="Long range in feet" title="Long range (ft)"${d}></div>` : ''}</div>
+      <select data-k="ability" aria-label="Attack ability"${d}>${ATK_ABILS.map(([v, l]) => `<option value="${v}"${(a.ability || 'str') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
+      <button type="button" class="pf p${a.prof !== false ? 1 : 0}" data-atk-act="prof" title="Proficient" aria-label="Proficient"${d}>${a.prof !== false ? '●' : ''}</button>
+      <button type="button" class="roll" data-atk-act="hit" title="Roll to hit">${sgn(atkHit(c, a))}</button>
+      <input value="${esc(a.dmg || '')}" placeholder="1d8" data-k="dmg" aria-label="Damage dice"${d}>
+      <select data-k="dmgType" aria-label="Damage type"${d}>${DMG_TYPES.map((t) => `<option${(a.dmgType || 'slashing') === t ? ' selected' : ''}>${t}</option>`).join('')}</select>
+      <button type="button" class="roll" data-atk-act="dmg" title="Roll damage">Damage</button>
+      <button type="button" data-atk-act="range" title="Show this range around your token on the battle map">Range</button>
+      ${ed ? '<button type="button" class="x" data-atk-act="del" aria-label="Delete attack">×</button>' : '<span></span>'}
+    </div>`;
+  };
+  return `<div class="cs-attacks"><div class="section-head"><span class="lbl">Attacks</span>${ed ? '<button type="button" data-atk-act="add">+ Add attack</button>' : ''}</div>
+    ${list.length ? `<div class="atk head"><span>Name</span><span>Range</span><span>Ability</span><span>Prof</span><span>To hit</span><span>Damage</span><span>Type</span><span></span><span></span><span></span></div>${list.map(row).join('')}`
+      : '<p class="muted">No attacks yet. Add your weapons and attack spells to roll them from here.</p>'}</div>`;
+}
+const dieN = (n) => { try { const a = new Uint32Array(1); crypto.getRandomValues(a); return (a[0] % n) + 1; } catch (e) { return Math.floor(Math.random() * n) + 1; } };
+// Rolls dice like "1d8", "2d6+1d4" or "1d10+2". Returns null if it can't read the text.
+function rollDice(expr) {
+  const src = String(expr || '').replace(/\s+/g, '').toLowerCase();
+  if (!src || !/^[+-]?(\d*d\d+|\d+)([+-](\d*d\d+|\d+))*$/.test(src)) return null;
+  let total = 0; const parts = [];
+  for (const m of src.matchAll(/([+-]?)(?:(\d*)d(\d+)|(\d+))/g)) {
+    const neg = m[1] === '-';
+    if (m[3]) {
+      const n = clamp(parseInt(m[2] || '1', 10), 1, 50), sides = clamp(parseInt(m[3], 10), 2, 1000);
+      const rs = Array.from({ length: n }, () => dieN(sides)), sum = rs.reduce((x, y) => x + y, 0);
+      total += neg ? -sum : sum; parts.push(`${parts.length ? (neg ? '− ' : '+ ') : neg ? '−' : ''}${n}d${sides} (${rs.join(', ')})`);
+    } else {
+      const v = parseInt(m[4], 10); total += neg ? -v : v; parts.push(`${neg ? '−' : '+'} ${v}`);
+    }
+  }
+  return { total, detail: parts.join(' ') };
+}
+function shareRoll(roll) {
+  toast(`${roll.who} · ${roll.label}: ${roll.total} (${roll.detail})${roll.nat === 20 ? ' · natural 20' : roll.nat === 1 ? ' · natural 1' : ''}`);
+  floatRoll(tokensOn(curMap).find((t) => t.owner === roll.uid), roll, 0);
+  if (rollsCap) rollsCap.send(roll).catch(() => {});
+}
+function rollAttack(a, what) {
+  const c = CH.get(csUid) || {}, who = c.name || memberName(csUid), name = a.name || 'Attack';
+  if (what === 'hit') {
+    const r = d20(), b = atkHit(c, a);
+    shareRoll({ uid: csUid, who, label: name + ' to hit', total: r + b, detail: `${r} ${b < 0 ? '−' : '+'} ${Math.abs(b)}`, nat: r === 20 ? 20 : r === 1 ? 1 : null });
+  } else {
+    const dice = rollDice(a.dmg || '1d4');
+    if (!dice) { toast('Write damage as dice, like 1d8 or 2d6+1.', true); return; }
+    const m = atkMod(c, a), total = Math.max(0, dice.total + m);
+    shareRoll({ uid: csUid, who, label: `${name} ${a.dmgType || 'damage'}`, total, detail: `${dice.detail}${m ? ` ${m < 0 ? '−' : '+'} ${Math.abs(m)}` : ''}`.slice(0, 40), nat: null });
+  }
+}
+// Draws the attack's reach around the character's token on the open battle map (only for this viewer).
+let rangeTimer = null;
+function clearRange() { const l = $('#rangeLayer'); if (l) l.innerHTML = ''; clearTimeout(rangeTimer); }
+function showRange(a) {
+  const m = D.maps.get(curMap), t = tokensOn(curMap).find((x) => x.owner === csUid);
+  if (!isBattle(m) || !t) { toast('Open a battle map with this character’s token on it to see the range.', true); return; }
+  const g = gridOf(m), w = m.w || 1600, h = m.h || 1000, rTok = g.cell * (t.size || 1) / 2;
+  const [normal, long] = atkRange(a);
+  const ring = (ft, cls) => { const r = rTok + (ft / 5) * g.cell; return `<div class="rangering${cls}" style="left:${t.x * w}px;top:${t.y * h}px;width:${2 * r}px;height:${2 * r}px"></div>`; };
+  clearRange();
+  $('#rangeLayer').innerHTML = (long > normal ? ring(long, ' long') : '') + ring(normal, '');
+  closeSheet();
+  toast(`${a.name || 'Attack'}: ${normal} ft${long > normal ? `, up to ${long} ft at disadvantage (dashed)` : ''}. Hidden again in 20 seconds.`);
+  rangeTimer = setTimeout(clearRange, 20000);
+}
+
 function rollCs(key) {
   const c = CH.get(csUid) || {}, r = d20();
   let label, bonus;
@@ -1012,6 +1127,23 @@ function rollCs(key) {
 }
 $('#csSheet').addEventListener('change', (e) => {
   const t = e.target, c = CH.get(csUid) || {};
+  const atkRow = t.closest('[data-atk]');
+  if (atkRow && t.dataset.k) {
+    const id = atkRow.dataset.atk, k = t.dataset.k;
+    let v = t.value;
+    if (k === 'normal' || k === 'long') v = v === '' ? '' : clamp(parseInt(v, 10) || 0, 0, 5000);
+    if (k === 'name') v = v.slice(0, 40);
+    const atks = (c.atks || []).map((a) => {
+      if (a.id !== id) return a;
+      const next = { ...a, [k]: v };
+      // A new range type brings sensible defaults: ranged weapons use DEX, thrown 20/60, bows 80/320.
+      if (k === 'range' && v === 'thrown' && !a.normal) Object.assign(next, { normal: 20, long: 60 });
+      if (k === 'range' && v === 'ranged' && !a.normal) Object.assign(next, { normal: 80, long: 320, ability: a.ability === 'str' ? 'dex' : a.ability });
+      return next;
+    });
+    saveSheet({ atks }); if (['range', 'ability'].includes(k)) renderSheet(); else updateAttackNumbers();
+    return;
+  }
   if (t.dataset.ds) {
     const k = t.dataset.ds, i = +t.dataset.i, cur = (c.ds || {})[k] || 0;
     saveSheet({ ds: { [k]: cur > i ? i : i + 1 } }); renderSheet(); return;
@@ -1033,6 +1165,16 @@ $('#csSheet').addEventListener('click', (e) => {
     try { await db.collection('characters').doc(uid).delete(); toast('Character sheet deleted.'); } catch (err) { writeErr(err); }
   });
   else if (b.dataset.rollCs) rollCs(b.dataset.rollCs);
+  else if (b.dataset.atkAct) {
+    const act = b.dataset.atkAct, id = (b.closest('[data-atk]') || {}).dataset?.atk;
+    const list = c.atks || [], a = list.find((x) => x.id === id);
+    if (act === 'add') { saveSheet({ atks: [...list, { id: uid(), name: '', range: 'melee', ability: 'str', prof: true, dmg: '1d8', dmgType: 'slashing' }] }); renderSheet(); setTimeout(() => { const ins = document.querySelectorAll('#csSheet .atk input[data-k="name"]'); if (ins.length) ins[ins.length - 1].focus(); }, 20); }
+    else if (!a) return;
+    else if (act === 'hit' || act === 'dmg') rollAttack(a, act);
+    else if (act === 'range') showRange(a);
+    else if (act === 'prof') { saveSheet({ atks: list.map((x) => (x.id === id ? { ...x, prof: x.prof === false } : x)) }); renderSheet(); }
+    else if (act === 'del') { saveSheet({ atks: list.filter((x) => x.id !== id) }); renderSheet(); }
+  }
   else if (b.dataset.pf) { const v = ((Number((c.prof || {})[b.dataset.pf]) || 0) + 1) % 3; saveSheet({ prof: { [b.dataset.pf]: v } }); renderSheet(); }
   else if (b.dataset.save) { saveSheet({ saves: { [b.dataset.save]: !(c.saves || {})[b.dataset.save] } }); renderSheet(); }
 });
