@@ -1,7 +1,13 @@
-# D&D table tools
+# Campaign Atlas
 
-Two single-file web apps for running a 5e game.
+Maps, places, NPCs, connections, DM-only character sheets and secrets, and a player view for a D&D campaign.
 
-- `index.html` — **Initiative Ledger**: combat tracker with turn order, HP and temp HP, conditions, death saves, concentration checks, and a dice roller. Saves to the browser.
-- `atlas.html` — **Campaign Atlas**: upload campaign maps, pin places and NPCs, nest detailed maps inside places, track NPC connections, and keep DM-only character sheets, secrets, and hidden pins. Built as a Claude artifact: it uses the artifact runtime (`window.claude`) for storage and uploads, so it only works fully when opened as a claude.ai artifact.
-- `maps/` — sample world and town map images.
+The atlas runs as a Claude artifact: https://claude.ai/artifact/PaxWd1yWAy6o1hT5Ddb2YB
+Campaign data (maps, pins, NPCs, sheets) is stored in Claude, not in this repository.
+
+## Layout
+
+- `index.html`: landing page for GitHub Pages that links to the atlas.
+- `atlas/index.html`: source of the Campaign Atlas artifact. It uses the Claude artifact runtime (`window.claude`) for storage and uploads, so it only works when opened as a claude.ai artifact.
+- `atlas/sample-maps/`: the example world and town maps.
+- `initiative/index.html`: Initiative Ledger, a standalone combat tracker that saves to the browser. It shares no files with the atlas, so the `initiative/` folder can be deleted without affecting anything else.
