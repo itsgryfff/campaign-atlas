@@ -230,6 +230,22 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
 .vis.off { border-style: dashed; background: var(--hover); }
 .pvtoggle[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .pvbanner { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; background: var(--accent); color: var(--on-accent); padding: 8px 12px; border-radius: 8px; font-size: .88rem; font-weight: 600; box-shadow: 0 2px 8px var(--shadow); }
+.tgtbar { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 3; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface); color: var(--ink); border: 2px solid var(--bad); padding: 8px 12px; border-radius: 8px; font-size: .88rem; font-weight: 600; box-shadow: 0 2px 8px var(--shadow); }
+.tgtbar .btnrow { gap: 6px; }
+#combatBtn[aria-pressed="true"] { background: var(--bad); color: var(--surface); border-color: var(--bad); }
+.pin.tok.tgt .disc { outline: .2em dashed var(--bad); outline-offset: .15em; cursor: crosshair; }
+.pin.tok.tgt-on .disc { outline: .25em solid var(--bad); outline-offset: .15em; box-shadow: 0 0 0 .5em color-mix(in srgb, var(--bad) 25%, transparent); }
+.pin.tok.tgt-far { opacity: .45; }
+.pin.tok .hpb { position: absolute; left: 12%; right: 12%; top: 100%; margin-top: -.3em; height: .32em; border-radius: 99px; background: color-mix(in srgb, var(--ink) 30%, transparent); overflow: hidden; pointer-events: none; }
+.pin.tok .hpb i { display: block; height: 100%; background: var(--good); }
+.pin.tok .hpb i.low { background: var(--bad); }
+.pin.tok.down .disc { filter: grayscale(1) brightness(.7); }
+.pin.tok .conds { position: absolute; right: -.35em; top: -.35em; display: flex; gap: .05em; font-size: .75em; line-height: 1; pointer-events: none; filter: drop-shadow(0 1px 1px var(--shadow)); }
+.condlist { display: flex; flex-wrap: wrap; gap: 6px; }
+.condlist .cond { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; border-radius: 999px; border: 1px solid var(--bad); color: var(--bad); font-size: .8rem; font-weight: 700; }
+.condlist .cond .x { padding: 0 .3rem; }
+.tokhp { display: flex; align-items: center; gap: 6px; }
+.tokhp input { width: 5.5em; font-family: var(--mono); }
 .lockbar { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface); color: var(--ink); border: 2px solid var(--brass); padding: 8px 12px; border-radius: 8px; font-size: .88rem; font-weight: 600; box-shadow: 0 2px 8px var(--shadow); }
 .lockbar .btnrow { gap: 6px; }
 .pvbanner:not([hidden]) ~ .lockbar { bottom: 64px; }
@@ -316,7 +332,7 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
 .slot .pips { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; min-height: 14px; }
 .pip2 { width: 13px; height: 13px; padding: 0; border-radius: 50%; border: 2px solid var(--accent); background: var(--accent); }
 .pip2.used { background: transparent; border-color: var(--line); }
-.spl { display: grid; grid-template-columns: minmax(110px, 1.4fr) 88px 34px minmax(118px, 1fr) 76px 70px 100px 70px 34px 58px auto 28px; gap: 6px; align-items: center; }
+.spl { display: grid; grid-template-columns: minmax(110px, 1.4fr) 88px 34px minmax(118px, 1fr) 76px 70px 100px 70px 108px 34px 34px 58px auto 28px; gap: 6px; align-items: center; }
 .spl.head { font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; }
 .spl select, .spl input { padding: .35rem .4rem; }
 .spl .ft { display: flex; align-items: center; gap: 4px; }
@@ -419,10 +435,12 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
           <button type="button" id="zFit">Fit</button>
         </div>
         <div class="seg"><button type="button" id="labelsBtn" aria-pressed="true">Labels</button></div>
+        <div class="seg" id="combatSeg" hidden><button type="button" id="combatBtn" aria-pressed="false" title="When on, attacks and spells from the action ring target tokens: the site rolls against their AC or saves and changes their HP">⚔ Auto combat: Off</button></div>
         <div class="seg" id="lockSeg" hidden><button type="button" id="lockBtn" aria-pressed="false">Lock players here</button></div>
       </div>
       <div class="pvbanner" id="pvBanner" hidden><span>Player view: this is what your players see. Hidden maps, places and NPCs are left out.</span><button type="button" id="pvExit">Back to DM view</button></div>
       <div class="lockbar" id="lockBar" hidden></div>
+      <div class="tgtbar" id="tgtBar" hidden></div>
       <div class="hintbar" id="hint" hidden></div>
       <div class="mapempty" id="mapEmpty" hidden></div>
       <div class="dropzone" id="dropzone" hidden>Drop the image to add it as a map</div>
@@ -485,6 +503,9 @@ const ALL = { maps: new Map(), places: new Map(), npcs: new Map(), tokens: new M
 let MEMBERS = [], myId = null, myName = '';
 let tokenImgs = null;
 let rollsCap = null;
+let COMBAT = false;     // the DM's auto-combat switch
+let combatCap = null;   // the host's combat resolver, when it has one
+const TOKHP = new Map(); // DM only: hit points of NPC tokens, token id -> { hp, max }
 let LOCK = null;        // the map the DM is keeping every player on, or null
 // The map this viewer is held on: players (and a DM previewing the player view) follow the DM's lock
 // while that map is visible to them.
@@ -744,6 +765,7 @@ vp.addEventListener('keydown', (e) => {
 });
 // A place with its own map opens that map; anything else shows its details.
 function activatePin(kind, id) {
+  if (targeting) { if (kind === 'token') pickTarget(id); return; }
   const kids = kind === 'place' && mode === 'move' && !lockedMap() ? childMaps(id) : [];
   if (kids.length) { openMap(kids[0].id); return; }
   select(kind, id);
@@ -768,7 +790,7 @@ function setMode(m, npcId) {
 }
 $('#modes').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setMode(b.dataset.mode); });
 $('#mySeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setMode(mode === 'mytoken' ? 'move' : 'mytoken'); });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ringFor) { closeRing(); return; } if (e.key === 'Escape' && mode !== 'move') setMode('move'); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && targeting) { endTargeting(); return; } if (e.key === 'Escape' && ringFor) { closeRing(); return; } if (e.key === 'Escape' && mode !== 'move') setMode('move'); });
 $('#labelsBtn').addEventListener('click', () => {
   showLabels = !showLabels; store.set('atlas-labels', showLabels ? '1' : '0');
   $('#labelsBtn').setAttribute('aria-pressed', String(showLabels)); $('#mapwrap').classList.toggle('hidelabels', !showLabels);
@@ -824,7 +846,7 @@ function openMap(id, keepSel) {
   render(true);
 }
 function loadImage() {
-  $('#floats').innerHTML = ''; clearRange(); closeRing();
+  $('#floats').innerHTML = ''; endTargeting(); clearRange(); closeRing();
   const m = D.maps.get(curMap); if (!m) return;
   V.w = m.w || 1600; V.h = m.h || 1000;
   stage.style.width = V.w + 'px'; stage.style.height = V.h + 'px';
@@ -1131,6 +1153,8 @@ async function saveSheet(patch) {
   try { await db.collection('characters').doc(csUid).update(patch); } catch (e) { writeErr(e); }
 }
 /* ---------- Attacks ---------- */
+const CONDITIONS = [['blinded', 'Blinded', '🙈'], ['charmed', 'Charmed', '💖'], ['deafened', 'Deafened', '🔇'], ['frightened', 'Frightened', '😱'], ['grappled', 'Grappled', '✊'], ['incapacitated', 'Incapacitated', '🚫'], ['paralyzed', 'Paralyzed', '⚡'], ['poisoned', 'Poisoned', '🤢'], ['prone', 'Prone', '🛌'], ['restrained', 'Restrained', '⛓️'], ['stunned', 'Stunned', '💫'], ['unconscious', 'Unconscious', '💤']];
+const condInfo = (c) => CONDITIONS.find(([v]) => v === c);
 const RANGES = [['melee', 'Melee (5 ft)'], ['reach', 'Reach (10 ft)'], ['ranged', 'Ranged'], ['thrown', 'Thrown']];
 const ATK_ABILS = [['str', 'STR'], ['dex', 'DEX'], ['finesse', 'Finesse'], ['int', 'INT'], ['wis', 'WIS'], ['cha', 'CHA'], ['none', 'None']];
 const DMG_TYPES = ['slashing', 'piercing', 'bludgeoning', 'fire', 'cold', 'lightning', 'thunder', 'acid', 'poison', 'necrotic', 'radiant', 'force', 'psychic'];
@@ -1249,6 +1273,8 @@ function spellsHTML(c, ed) {
       <input value="${esc(sp.up || '')}" placeholder="${(parseInt(sp.level, 10) || 0) ? '+1d6' : 'auto'}" data-k="up" aria-label="Extra dice per slot level above the spell\u2019s level" title="${(parseInt(sp.level, 10) || 0) ? 'Extra dice for each slot level above this spell\u2019s level' : 'Cantrip damage grows with character level automatically'}"${d}${(parseInt(sp.level, 10) || 0) ? '' : ' disabled'}>
       <select data-k="type" aria-label="Damage type"${d}><option value="">—</option>${DMG_TYPES.map((t) => `<option${sp.type === t ? ' selected' : ''}>${t}</option>`).join('')}</select>
       <span class="ft"><input type="number" min="0" step="5" value="${esc(sp.range ?? '')}" placeholder="0" data-k="range" aria-label="Range in feet (0 for self or touch)"${d}><span>ft</span></span>
+      <select data-k="cond" aria-label="Condition on a failed save or hit" title="Condition put on the target when it fails the save or is hit (auto combat)"${d}><option value="">No condition</option>${CONDITIONS.map(([v, l]) => `<option value="${v}"${sp.cond === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
+      ${(() => { const half = sp.half != null ? !!sp.half : (parseInt(sp.level, 10) || 0) > 0, save = String(sp.effect || '').startsWith('save:'); return `<button type="button" class="pf p${save && half ? 1 : 0}" data-sp-act="half" title="${save ? (half ? 'Half damage on a successful save' : 'No damage on a successful save') : 'Only for spells with a saving throw'}" aria-label="Half damage on a successful save"${d}${save ? '' : ' disabled'}>${save && half ? '½' : ''}</button>`; })()}
       <button type="button" class="pf p${sp.conc ? 2 : 0}" data-sp-act="conc" title="Concentration" aria-label="Concentration"${d}>${sp.conc ? 'C' : ''}</button>
       <button type="button" class="primary" data-sp-act="cast"${d}>Cast</button>
       <button type="button" data-sp-act="range" title="Show range on the battle map">Range</button>
@@ -1263,7 +1289,7 @@ function spellsHTML(c, ed) {
       ${ed ? '<button type="button" data-sp-act="rest" title="Refill all spell slots and end concentration">Long rest</button>' : ''}
     </div>
     <div class="slots">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(slotBox).join('')}</div>
-    ${list.length ? `<div class="spl head"><span>Spell</span><span>Level</span><span>Prep</span><span>Effect</span><span>Dice</span><span>Upcast</span><span>Type</span><span>Range</span><span>Conc</span><span></span><span></span><span></span></div>${list.map(row).join('')}`
+    ${list.length ? `<div class="spl head"><span>Spell</span><span>Level</span><span>Prep</span><span>Effect</span><span>Dice</span><span>Upcast</span><span>Type</span><span>Range</span><span>Condition</span><span>½</span><span>Conc</span><span></span><span></span><span></span></div>${list.map(row).join('')}`
       : '<p class="muted">No spells yet. Add them to cast from here: the right slot is used and the roll goes to the table.</p>'}
   </div>`;
 }
@@ -1297,7 +1323,9 @@ function showCastMenu(sp, levels) {
     ${levels.map(([L, left]) => `<button type="button" data-cast-at="${L}">${SPELL_LEVELS[L]} · ${left} left</button>`).join('')}
     <button type="button" data-cast-at="cancel">Cancel</button></div>`);
 }
-function castSpell(sp, chosen) {
+// With `resolve`, the slot and concentration are handled here and resolve(castAt) does the rolling
+// (auto combat); otherwise the rolls are made here and shared with the table.
+function castSpell(sp, chosen, resolve) {
   const c = CH.get(csUid) || {}, who = c.name || sheetName(csUid), name = sp.name || 'Spell';
   const level = parseInt(sp.level, 10) || 0;
   let castAt = 0, note = '';
@@ -1312,6 +1340,7 @@ function castSpell(sp, chosen) {
     if (castAt > level) note = ` at ${SPELL_LEVELS[castAt]}`;
   }
   if (sp.conc) saveSheet({ concOn: name });
+  if (resolve) { resolve(castAt); if (!$('#csModal').hidden) renderSheet(); return; }
   const eff = sp.effect || 'none';
   if (eff === 'attack') {
     const r = d20(), b = spAtk(c);
@@ -1359,7 +1388,7 @@ function openRing(tokId, view) {
   const slotsLeft = (L) => { const sl = (c.slots || {})[L] || {}; return Math.max(0, (parseInt(sl.max, 10) || 0) - (parseInt(sl.used, 10) || 0)); };
   let items;
   if (view && view.sp) {
-    items = view.levels.map(([L, left]) => ({ kind: 'lvl', label: SPELL_LEVELS[L], sub: `${left} left`, act: () => { withSheet(key, () => castSpell(view.sp, L)); closeRing(); } }));
+    items = view.levels.map(([L, left]) => ({ kind: 'lvl', label: SPELL_LEVELS[L], sub: `${left} left`, act: () => { closeRing(); if (targetable(view.sp)) startTargeting(tokId, key, 'spell', view.sp, L); else withSheet(key, () => castSpell(view.sp, L)); } }));
     items.push({ kind: 'util', label: 'Back', sub: '', act: () => openRing(tokId, 'spells') });
   } else if (view === 'spells') {
     items = spells.map((sp) => {
@@ -1371,7 +1400,9 @@ function openRing(tokId, view) {
           if (!levels.length) { toast(`No spell slots left for ${sp.name || 'that spell'}.`, true); return; }
           if (levels.length > 1) { openRing(tokId, { sp, levels }); return; }
         }
-        withSheet(key, () => castSpell(sp)); closeRing();
+        closeRing();
+        if (targetable(sp)) startTargeting(tokId, key, 'spell', sp, lv ? castLevels(CH.get(key) || {}, lv)[0][0] : 0);
+        else withSheet(key, () => castSpell(sp));
       } };
     });
     if (items.length > 11) items = [...items.slice(0, 10), { kind: 'util', label: `${spells.length - 10} more…`, sub: 'open sheet', act: toSheet.act }];
@@ -1381,7 +1412,7 @@ function openRing(tokId, view) {
   } else {
     items = atks.slice(0, spells.length ? 10 : 11).map((a) => ({
       kind: 'atk', label: a.name || 'Attack', sub: `${sgn(atkHit(c, a))} · ${a.dmg || '1d4'}`, range: atkRange(a),
-      act: () => { withSheet(key, () => { rollAttack(a, 'hit'); rollAttack(a, 'dmg'); }); closeRing(); },
+      act: () => { closeRing(); if (combatOn()) startTargeting(tokId, key, 'atk', a); else withSheet(key, () => { rollAttack(a, 'hit'); rollAttack(a, 'dmg'); }); },
     }));
     if (spells.length) items.push({ kind: 'spell', label: 'Spells', sub: `${spells.length} ready`, act: () => openRing(tokId, 'spells') });
     if (!atks.length && !spells.length) items.push({ kind: 'util', label: 'No attacks yet', sub: 'add them on the sheet', act: toSheet.act });
@@ -1391,6 +1422,89 @@ function openRing(tokId, view) {
   $('#ringLayer').innerHTML = `<div class="aring" id="aring">${ringItems.map((it, i) => `<button type="button" class="ai${it.kind === 'atk' ? '' : ' ' + it.kind}${it.dim ? ' dim' : ''}" data-ri="${i}" style="animation-delay:${i * 25}ms"><span>${esc(it.label)}</span>${it.sub ? `<small>${esc(it.sub)}</small>` : ''}</button>`).join('')}</div>`;
   layoutRing();
 }
+/* ---------- Auto combat: choosing targets ---------- */
+// On when the DM has switched it on and the open map is a battle map.
+const combatOn = () => COMBAT && !!combatCap && isBattle(D.maps.get(curMap));
+const spellEffect = (sp) => String(sp.effect || 'none');
+// Spells auto combat can resolve: spell attacks, saving throws and healing.
+const targetable = (sp) => combatOn() && (spellEffect(sp) === 'attack' || spellEffect(sp) === 'heal' || spellEffect(sp).startsWith('save:'));
+// Feet between two tokens, counting squares the 5e way (diagonals are 5 ft, neighbours are 5 ft apart).
+// The server measures the same way.
+function tokDistance(a, b) {
+  const m = D.maps.get(a.mapId); if (!m) return Infinity;
+  const g = gridOf(m), w = m.w || 1600, h = m.h || 1000;
+  const dx = Math.abs(a.x - b.x) * w / g.cell, dy = Math.abs(a.y - b.y) * h / g.cell;
+  return (Math.max(0, Math.round(Math.max(dx, dy) - ((a.size || 1) + (b.size || 1)) / 2)) + 1) * 5;
+}
+let targeting = null;   // { tokId, key, kind, item, castAt, range: [normal, long], multi, picked: Set }
+function startTargeting(tokId, key, kind, item, castAt) {
+  const t = D.tokens.get(tokId); if (!t) return;
+  const eff = kind === 'atk' ? 'weapon' : spellEffect(item);
+  const range = kind === 'atk' ? atkRange(item) : [Math.max(5, parseInt(item.range, 10) || 0), 0];
+  targeting = { tokId, key, kind, item, castAt: castAt || 0, range, eff, multi: eff === 'heal' || eff.startsWith('save:'), picked: new Set() };
+  drawRange(t, range[0], range[1]);
+  renderTargeting(); renderMap();
+}
+function endTargeting() {
+  if (!targeting) return;
+  targeting = null; clearRange(); $('#tgtBar').hidden = true; renderMap();
+}
+function inRange(t) {
+  const from = targeting && D.tokens.get(targeting.tokId);
+  return !!from && t.mapId === from.mapId && tokDistance(from, t) <= Math.max(targeting.range[0], targeting.range[1]);
+}
+function renderTargeting() {
+  const bar = $('#tgtBar');
+  if (!targeting) { bar.hidden = true; return; }
+  const n = targeting.picked.size, name = esc(targeting.item.name || (targeting.kind === 'spell' ? 'the spell' : 'the attack'));
+  const lvl = targeting.castAt > (parseInt(targeting.item.level, 10) || 0) ? ` at ${SPELL_LEVELS[targeting.castAt]} level` : '';
+  bar.innerHTML = targeting.multi
+    ? `<span>🎯 Choose targets for <b>${name}</b>${lvl} (${n} chosen)${targeting.eff === 'heal' ? '' : ' · each rolls a save'}</span><span class="btnrow"><button type="button" class="primary" data-tgt="go"${n ? '' : ' disabled'}>${targeting.eff === 'heal' ? 'Heal' : 'Cast'}${n ? ' on ' + n : ''}</button><button type="button" data-tgt="free">Roll without targets</button><button type="button" data-tgt="cancel">Cancel</button></span>`
+    : `<span>🎯 Choose a target for <b>${name}</b>${lvl}</span><span class="btnrow"><button type="button" data-tgt="free">Roll without a target</button><button type="button" data-tgt="cancel">Cancel</button></span>`;
+  bar.hidden = false;
+}
+function pickTarget(id) {
+  const t = D.tokens.get(id); if (!targeting || !t) return;
+  if (id === targeting.tokId && targeting.eff !== 'heal') { toast('Pick another token to target.'); return; }
+  if (!inRange(t)) { toast(`${tokLabel(t)} is out of range (${tokDistance(D.tokens.get(targeting.tokId), t)} ft away).`, true); return; }
+  if (!targeting.multi) { fireTargeting([id]); return; }
+  if (targeting.picked.has(id)) targeting.picked.delete(id); else targeting.picked.add(id);
+  renderTargeting(); renderMap();
+}
+function showCombatRolls(rolls) {
+  (rolls || []).forEach((roll) => { shownRolls.add(roll.id); floatRoll(D.tokens.get(roll.tok), roll, 0); });
+  const r0 = (rolls || [])[0];
+  if (r0) toast((rolls.length > 1 ? `${r0.label}: ` : `${r0.who} · ${r0.label}: `) + rolls.map((r) => (rolls.length > 1 ? r.who.split(' → ').pop() + ' ' : '') + r.total).join(', '));
+}
+function fireTargeting(ids) {
+  const tg = targeting; if (!tg) return;
+  endTargeting();
+  const send = (castAt) => combatCap.resolve({ from: tg.tokId, kind: tg.kind, id: tg.item.id, castAt, targets: ids })
+    .then((j) => showCombatRolls(j.rolls))
+    .catch((err) => toast(err.message || 'That didn’t go through. Try again.', true));
+  if (tg.kind === 'spell') withSheet(tg.key, () => castSpell(tg.item, tg.castAt || null, send));
+  else send(0);
+}
+// The old way: roll and share the numbers without touching anyone's sheet.
+function rollFree() {
+  const tg = targeting; if (!tg) return;
+  endTargeting();
+  if (tg.kind === 'atk') withSheet(tg.key, () => { rollAttack(tg.item, 'hit'); rollAttack(tg.item, 'dmg'); });
+  else withSheet(tg.key, () => castSpell(tg.item, tg.castAt || null));
+}
+$('#tgtBar').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-tgt]'); if (!b || !targeting) return;
+  if (b.dataset.tgt === 'cancel') endTargeting();
+  else if (b.dataset.tgt === 'free') rollFree();
+  else if (b.dataset.tgt === 'go' && targeting.picked.size) fireTargeting([...targeting.picked]);
+});
+async function setCombat(on) {
+  const prev = COMBAT; COMBAT = on; renderMap();
+  try { await db.collection('settings').doc('combat').set({ on, at: Date.now() }); toast(on ? 'Auto combat is on: attacks and spells from the action ring now target tokens.' : 'Auto combat is off: the action ring just rolls dice.'); }
+  catch (e) { COMBAT = prev; renderMap(); writeErr(e); }
+}
+$('#combatBtn').addEventListener('click', () => { if (editable) setCombat(!COMBAT); });
+
 // Positions the ring's buttons in a circle just outside the token, in screen pixels.
 function layoutRing() {
   const t = D.tokens.get(ringFor), m = D.maps.get(curMap), el = $('#aring');
@@ -1452,7 +1566,7 @@ $('#csSheet').addEventListener('change', (e) => {
     if (k === 'range') v = v === '' ? '' : clamp(parseInt(v, 10) || 0, 0, 5000);
     if (k === 'name') v = v.slice(0, 40);
     saveSheet({ splist: (c.splist || []).map((x) => (x.id === id ? { ...x, [k]: v } : x)) });
-    if (k === 'level') renderSheet();
+    if (k === 'level' || k === 'effect') renderSheet();
     return;
   }
   const atkRow = t.closest('[data-atk]');
@@ -1523,6 +1637,7 @@ $('#csSheet').addEventListener('click', (e) => {
     }
     else if (act === 'prep') { saveSheet({ splist: list.map((x) => (x.id === id ? { ...x, prep: x.prep === false } : x)) }); renderSheet(); }
     else if (act === 'conc') { saveSheet({ splist: list.map((x) => (x.id === id ? { ...x, conc: !x.conc } : x)) }); renderSheet(); }
+    else if (act === 'half') { const cur = sp.half != null ? !!sp.half : (parseInt(sp.level, 10) || 0) > 0; saveSheet({ splist: list.map((x) => (x.id === id ? { ...x, half: !cur } : x)) }); renderSheet(); }
     else if (act === 'del') { saveSheet({ splist: list.filter((x) => x.id !== id) }); renderSheet(); }
   }
   else if (b.dataset.atkAct) {
@@ -1572,7 +1687,7 @@ window.addEventListener('atlas-rolls', (e) => {
     if (roll.by === myId) return;   // our own rolls were shown when we made them
     const age = now - roll.at;
     if (age >= ROLL_MS) return;
-    const shown = floatRoll(sheetToken(roll.uid), roll, age);
+    const shown = floatRoll(roll.tok ? D.tokens.get(roll.tok) : sheetToken(roll.uid), roll, age);
     if (!shown && age < 5000) toast(`${roll.who} · ${roll.label}: ${roll.total} (${roll.detail})${roll.nat === 20 ? ' · natural 20' : roll.nat === 1 ? ' · natural 1' : ''}`);
   });
 });
@@ -1687,8 +1802,11 @@ function pinsHTML() {
   const toks = isBattle(m) ? tokensOn(curMap).map((t) => {
     const g = gridOf(m), d = g.cell * (t.size || 1) * .9;
     const isSel = sel && sel.kind === 'token' && sel.id === t.id;
-    return `<button type="button" class="pin tok${isSel ? ' sel' : ''}${t._h ? ' hid' : ''}${canMoveTok(t) ? ' movable' : ''}" data-kind="token" data-id="${t.id}" style="left:${t.x * 100}%;top:${t.y * 100}%;width:${d}px;height:${d}px;font-size:${Math.max(6, g.cell * .3)}px;--tc:${tokColor(t.color)}" aria-label="Token: ${esc(tokLabel(t))}">
-      <span class="disc${safeImg(t.img) ? ' img' : ''}"${safeImg(t.img) ? ` style="--ti:url('${esc(safeImg(t.img))}')"` : ''}>${esc(initials(tokLabel(t)))}</span><span class="nm">${esc(tokLabel(t))}</span></button>`;
+    const hp = tokHp(t), pct = hp && hp.max ? clamp(hp.hp / hp.max, 0, 1) : null;
+    const tg = targeting ? (targeting.picked.has(t.id) ? ' tgt-on' : t.id === targeting.tokId && targeting.eff !== 'heal' ? '' : inRange(t) ? ' tgt' : ' tgt-far') : '';
+    const conds = (Array.isArray(t.conds) ? t.conds : []).map(condInfo).filter(Boolean);
+    return `<button type="button" class="pin tok${isSel ? ' sel' : ''}${t._h ? ' hid' : ''}${canMoveTok(t) ? ' movable' : ''}${pct === 0 ? ' down' : ''}${tg}" data-kind="token" data-id="${t.id}" style="left:${t.x * 100}%;top:${t.y * 100}%;width:${d}px;height:${d}px;font-size:${Math.max(6, g.cell * .3)}px;--tc:${tokColor(t.color)}" aria-label="Token: ${esc(tokLabel(t))}">
+      <span class="disc${safeImg(t.img) ? ' img' : ''}"${safeImg(t.img) ? ` style="--ti:url('${esc(safeImg(t.img))}')"` : ''}>${esc(initials(tokLabel(t)))}</span>${pct != null ? `<span class="hpb"><i class="${pct <= .25 ? 'low' : ''}" style="width:${Math.round(pct * 100)}%"></i></span>` : ''}${conds.length ? `<span class="conds" title="${esc(conds.map((c) => c[1]).join(', '))}">${conds.map((c) => c[2]).join('')}</span>` : ''}<span class="nm">${esc(tokLabel(t))}</span></button>`;
   }) : [];
   return places.join('') + npcs.join('') + toks.join('');
 }
@@ -1711,6 +1829,10 @@ function renderMap() {
   gl.hidden = !battle || m.gridShow === false;
   if (!gl.hidden) { const g = gridOf(m); gl.style.backgroundSize = `${g.cell}px ${g.cell}px`; gl.style.backgroundPosition = `${g.ox}px ${g.oy}px`; }
   $('#tokModeBtn').hidden = !battle;
+  $('#combatSeg').hidden = !battle || !editable || !combatCap;
+  $('#combatBtn').setAttribute('aria-pressed', String(COMBAT));
+  $('#combatBtn').textContent = `⚔ Auto combat: ${COMBAT ? 'On' : 'Off'}`;
+  if (targeting && !D.tokens.has(targeting.tokId)) endTargeting();
   $('#mySeg').hidden = !battle || isDM || !myId;
   window.__atlasFast = battle;   // the host refreshes faster while a battle map is open
   if (ringFor) layoutRing();     // follow the token if it moved
@@ -1909,6 +2031,30 @@ function npcCard(n) {
     <span class="face att-${esc(n.attitude)}">${esc(initials(n.name))}</span>
     <span><span class="t">${esc(n.name)}</span><span class="s">${esc(n.role || attName(n.attitude))}</span>${stats}</span><span class="chip">Open NPC</span></button>`;
 }
+// A token's hit points, when this viewer may see them: DMs see every token's, players their own.
+function tokHp(t) {
+  if (t.npcId) {
+    if (!isDM || playerView) return null;
+    const own = TOKHP.get(t.id); if (own) return { hp: parseInt(own.hp, 10) || 0, max: parseInt(own.max, 10) || 0, npc: true };
+    const max = parseInt(((SH.get(t.npcId) || {}).sheet || {}).hp, 10) || 0;
+    return max ? { hp: max, max, npc: true } : null;
+  }
+  const key = t.owner && CH.has(t.owner) ? t.owner : CH.has('tok:' + t.id) ? 'tok:' + t.id : null;
+  if (!key || (key !== myId && !(isDM && !playerView))) return null;
+  const c = CH.get(key), max = parseInt(c.hpMax, 10) || 0;
+  if (!max) return null;
+  return { hp: c.hp === '' || c.hp == null ? max : parseInt(c.hp, 10) || 0, max };
+}
+function combatHTML(t) {
+  const conds = (Array.isArray(t.conds) ? t.conds : []).map(condInfo).filter(Boolean);
+  const canClear = editable || (t.owner && t.owner === myId);
+  const hp = tokHp(t);
+  const hpRow = hp && hp.npc && editable
+    ? `<div class="field"><label class="lbl" for="tokHp">Hit points</label><div class="tokhp"><input id="tokHp" type="number" value="${hp.hp}" data-tokhp="${esc(t.id)}" aria-label="Current hit points"><span>/ ${hp.max}</span><button type="button" data-act="tokhp-reset" data-id="${esc(t.id)}">Full</button></div><p class="muted">Each token of this NPC has its own HP, starting from the NPC sheet.</p></div>`
+    : '';
+  if (!hpRow && !conds.length) return '';
+  return `${hpRow}${conds.length ? `<div class="field"><span class="lbl">Conditions</span><div class="condlist">${conds.map(([v, l, i]) => `<span class="cond">${i} ${l}${canClear ? `<button type="button" class="x" data-act="cond-rm" data-cond="${v}" aria-label="Remove ${l}">×</button>` : ''}</span>`).join('')}</div></div>` : ''}`;
+}
 function tokenHTML(t) {
   const can = canMoveTok(t), d = can ? '' : ' disabled', npc = tokNpc(t);
   const owner = MEMBERS.find((x) => x.id === t.owner);
@@ -1916,6 +2062,7 @@ function tokenHTML(t) {
     <div class="field"><label class="lbl" for="fName">Name</label><input id="fName" value="${esc(t.name)}" maxlength="40" placeholder="${esc(npc ? npc.name + ' (from the NPC)' : '')}" data-f="token:name"${d}></div>
     ${editable ? `<div class="field"><label class="lbl" for="tNpc">Linked NPC</label><select id="tNpc" data-f="token:npcId"><option value="">None</option>${[...D.npcs.values()].sort((a, b) => a.name.localeCompare(b.name)).map((n) => `<option value="${esc(n.id)}"${t.npcId === n.id ? ' selected' : ''}>${esc(n.name)}</option>`).join('')}</select></div>` : ''}
     ${npc ? npcCard(npc) : tokenSheetHTML(t)}
+    ${combatHTML(t)}
     <div class="field"><span class="lbl">Picture</span>
       <div class="tokpic"><span class="pv" style="--tc:${tokColor(t.color)}${safeImg(t.img) ? `;--ti:url('${esc(safeImg(t.img))}')` : ''}">${safeImg(t.img) ? '' : esc(initials(tokLabel(t)))}</span>
         ${canPicture(t) ? `<div class="btnrow"><label class="btn" for="tokImgIn" data-act="tok-img">${t.img ? 'Change picture' : 'Upload picture'}</label>${t.img ? '<button type="button" data-act="tok-img-rm">Remove</button>' : ''}</div>` : ''}
@@ -2128,6 +2275,13 @@ document.querySelector('.tabs').addEventListener('click', (e) => { const b = e.t
 
 /* ---------- Rail events ---------- */
 $('#pane').addEventListener('change', async (e) => {
+  if (e.target.dataset.tokhp && editable) {
+    const t = D.tokens.get(e.target.dataset.tokhp), hp = t && tokHp(t); if (!hp) return;
+    const v = Math.max(0, parseInt(e.target.value, 10) || 0);
+    TOKHP.set(t.id, { hp: v, max: hp.max }); renderMap();
+    db.collection('dm/tokhp').doc(t.id).set({ hp: v, max: hp.max }).catch(writeErr);
+    return;
+  }
   if (e.target.dataset.plink && linksCap) {
     const id = e.target.dataset.plink, l = PL.get(id); if (!l) return;
     PL.set(id, { ...l, rel: e.target.value }); renderPane(true);
@@ -2234,6 +2388,15 @@ $('#pane').addEventListener('click', (e) => {
   if (act === 'back') { sel = null; render(true); }
   else if (act === 'web-npc') { webFocus = b.dataset.id; tab = 'web'; renderPane(true); $('#pane').scrollTop = 0; }
   else if (act === 'web-list') { webFocus = null; renderPane(true); }
+  else if (act === 'cond-rm' && cur && sel.kind === 'token') {
+    const conds = (cur.conds || []).filter((c) => c !== b.dataset.cond);
+    D.tokens.set(cur.id, { ...cur, conds }); render(true); patch('tokens', cur.id, { conds });
+  }
+  else if (act === 'tokhp-reset' && cur && editable) {
+    const hp = tokHp(cur); if (!hp) return;
+    TOKHP.set(cur.id, { hp: hp.max, max: hp.max }); render(true);
+    db.collection('dm/tokhp').doc(cur.id).set({ hp: hp.max, max: hp.max }).catch(writeErr);
+  }
   else if (act === 'plink-del' && linksCap) arm(b, 'pl' + b.dataset.id, 'Delete?', () => {
     const id = b.dataset.id; const old = PL.get(id); PL.delete(id); renderPane(true);
     linksCap.delete(id).catch((err) => { if (old) PL.set(id, old); renderPane(true); toast(err.message || 'That connection wasn\u2019t deleted.', true); });
@@ -2371,6 +2534,7 @@ render();
     rollsCap = await c.use('rolls').catch(() => null);
     notesCap = await c.use('partyNotes').catch(() => null);
     linksCap = await c.use('partyLinks').catch(() => null);
+    combatCap = await c.use('combat').catch(() => null);
   } catch (e) {}
   if (isDM && !assets) console.warn('Atlas: assets capability unavailable in this view; map uploads disabled.');
   ['maps', 'places', 'npcs', 'tokens'].forEach((col) => subscribe(col, false));
@@ -2378,11 +2542,18 @@ render();
     ['maps', 'places', 'npcs', 'tokens'].forEach((col) => subscribe(col, true));
     subscribeSecrets('dm/sheets/npcs', SH);
     subscribeSecrets('dm/sheets/places', PS);
+    db.collection('dm/tokhp').onSnapshot((snap) => {
+      TOKHP.clear(); snap.docs.forEach((d) => TOKHP.set(d.id, d.data()));
+      renderMap(); if (sel && sel.kind === 'token') renderPane();
+    }, onSnapErr);
   }
   // Character sheets: the host sends a player only their own; DMs get everyone's.
   db.collection('settings').onSnapshot((snap) => {
     const v = snap.docs.find((d) => d.id === 'view');
     LOCK = (v && v.data().lockMap) || null;
+    const cb = snap.docs.find((d) => d.id === 'combat');
+    COMBAT = !!(cb && cb.data().on);
+    if (!COMBAT) endTargeting();
     afterData();
   }, onSnapErr);
   db.collection('partylinks').onSnapshot((snap) => {
