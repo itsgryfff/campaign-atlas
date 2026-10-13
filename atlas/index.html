@@ -332,13 +332,16 @@ textarea { resize: vertical; min-height: 110px; line-height: 1.45; }
 .slot .pips { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; min-height: 14px; }
 .pip2 { width: 13px; height: 13px; padding: 0; border-radius: 50%; border: 2px solid var(--accent); background: var(--accent); }
 .pip2.used { background: transparent; border-color: var(--line); }
-.spl { display: grid; grid-template-columns: minmax(110px, 1.4fr) 88px 34px minmax(118px, 1fr) 76px 70px 100px 70px 108px 34px 34px 58px auto 28px; gap: 6px; align-items: center; }
+.spl { display: grid; grid-template-columns: minmax(90px, 1.4fr) 76px 30px minmax(100px, 1fr) 62px 56px 92px 70px 96px 30px 30px 54px auto 26px; gap: 5px; align-items: center; }
+/* A row that is ever too wide scrolls inside its section instead of stretching the whole sheet. */
+.cs-body > * { min-width: 0; }
+.cs-attacks, .cs-spells { overflow-x: auto; }
 .spl.head { font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; }
 .spl select, .spl input { padding: .35rem .4rem; }
 .spl .ft { display: flex; align-items: center; gap: 4px; }
 .spl .ft input { font-family: var(--mono); }
 .spl .ft span { color: var(--muted); font-size: .78rem; }
-@media (max-width: 860px) {
+@media (max-width: 1000px) {
   .slots { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .spl.head { display: none; }
   .spl { grid-template-columns: 1fr 1fr 1fr; padding: 8px; border: 1px solid var(--line); border-radius: 8px; }
@@ -1273,7 +1276,7 @@ function spellsHTML(c, ed) {
       <input value="${esc(sp.up || '')}" placeholder="${(parseInt(sp.level, 10) || 0) ? '+1d6' : 'auto'}" data-k="up" aria-label="Extra dice per slot level above the spell\u2019s level" title="${(parseInt(sp.level, 10) || 0) ? 'Extra dice for each slot level above this spell\u2019s level' : 'Cantrip damage grows with character level automatically'}"${d}${(parseInt(sp.level, 10) || 0) ? '' : ' disabled'}>
       <select data-k="type" aria-label="Damage type"${d}><option value="">—</option>${DMG_TYPES.map((t) => `<option${sp.type === t ? ' selected' : ''}>${t}</option>`).join('')}</select>
       <span class="ft"><input type="number" min="0" step="5" value="${esc(sp.range ?? '')}" placeholder="0" data-k="range" aria-label="Range in feet (0 for self or touch)"${d}><span>ft</span></span>
-      <select data-k="cond" aria-label="Condition on a failed save or hit" title="Condition put on the target when it fails the save or is hit (auto combat)"${d}><option value="">No condition</option>${CONDITIONS.map(([v, l]) => `<option value="${v}"${sp.cond === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
+      <select data-k="cond" aria-label="Condition on a failed save or hit" title="Condition put on the target when it fails the save or is hit (auto combat)"${d}><option value="">None</option>${CONDITIONS.map(([v, l]) => `<option value="${v}"${sp.cond === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
       ${(() => { const half = sp.half != null ? !!sp.half : (parseInt(sp.level, 10) || 0) > 0, save = String(sp.effect || '').startsWith('save:'); return `<button type="button" class="pf p${save && half ? 1 : 0}" data-sp-act="half" title="${save ? (half ? 'Half damage on a successful save' : 'No damage on a successful save') : 'Only for spells with a saving throw'}" aria-label="Half damage on a successful save"${d}${save ? '' : ' disabled'}>${save && half ? '½' : ''}</button>`; })()}
       <button type="button" class="pf p${sp.conc ? 2 : 0}" data-sp-act="conc" title="Concentration" aria-label="Concentration"${d}>${sp.conc ? 'C' : ''}</button>
       <button type="button" class="primary" data-sp-act="cast"${d}>Cast</button>
